@@ -1,5 +1,4 @@
-
-   <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -56,4 +55,201 @@
     .sheet.full { height: 78vh; }
     .sheet.min { height: 92px; }
     .handle-wrap { padding: 8px 0 6px; touch-action: none; }
-    .handle
+    .handle { width: 42px; height: 5px; background: #7ed0c8; border-radius: 99px; margin: 0 auto; }
+    .sheet-body { overflow: auto; -webkit-overflow-scrolling: touch; flex: 1; }
+    .filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+    .chip {
+      flex: 0 0 auto; border: 1px solid #1f6276; background: var(--card);
+      color: var(--text); border-radius: 999px; padding: 6px 10px; font-size: 12px;
+    }
+    .chip.on { background: var(--accent); color: #08323c; font-weight: 700; }
+    .list { display: grid; gap: 8px; }
+    .item {
+      background: var(--card); border-radius: 12px; padding: 10px 12px;
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; }
+    .item h3 { margin: 0; font-size: 14px; }
+    .item p { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+    .item a { color: var(--accent); font-size: 12px; text-decoration: none; }
+    .actions { margin-left: auto; display: flex; flex-direction: column; gap: 6px; }
+    .actions button {
+      background: #0b3d4d; color: var(--accent); border: 1px solid #2a6b7c;
+      border-radius: 8px; padding: 6px 8px; font-size: 11px;
+    }
+    .leaflet-popup-content-wrapper { background: #0b3d4d; color: #f4f7f8; border-radius: 12px; }
+    .leaflet-popup-tip { background: #0b3d4d; }
+    .leaflet-popup-content { margin: 10px 12px; }
+    .leaflet-popup-content a { color: #7ed0c8; }
+    .note { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <header>
+    <div class="brand">
+      <h1>Greers Ferry Lake</h1>
+      <p>Find Your Escape · ramps, marinas & parks</p>
+    </div>
+    <button class="tool" id="locate">My location</button>
+    <button class="tool" id="toggleSheet">Hide list</button>
+  </header>
+  <section class="sheet mid" id="sheet">
+    <div class="handle-wrap" id="handle">
+      <div class="handle"></div>
+    </div>
+    <div class="filters">
+      <button class="chip on" data-type="all">All</button>
+      <button class="chip" data-type="marina">Marinas</button>
+      <button class="chip" data-type="ramp">Boat ramps</button>
+      <button class="chip" data-type="park">Parks</button>
+      <button class="chip" data-type="swim">Swim</button>
+    </div>
+    <div class="sheet-body">
+      <div class="list" id="list"></div>
+      <p class="note">
+        Day-use / launch fees often apply at Corps parks ($5 vehicle or $40 annual). Pets are not allowed in day-use swim areas.
+        Lake level: <a href="https://www.swl-wc.usace.army.mil/" target="_blank" rel="noopener">USACE</a> ·
+        Camping: <a href="https://www.recreation.gov" target="_blank" rel="noopener">Recreation.gov</a>
+      </p>
+    </div>
+  </section>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const places = [
+      { name: "Lacey's Narrows Marina", type: "marina", lat: 35.56036, lng: -92.19571, note: "Full-service marina, sales & rentals. 7674 Edgemont Rd, Greers Ferry. 501-825-6214" },
+      { name: "Narrows Park", type: "park", lat: 35.56397, lng: -92.19821, note: "58 electric sites, dump station, picnic shelter. 7699 Edgemont Rd. Next to Lacey's." },
+      { name: "Narrows Park Ramp", type: "ramp", lat: 35.5618, lng: -92.1969, note: "Corps launch at the Narrows / Edgemont Road bridge." },
+      { name: "Shiloh Marina", type: "marina", lat: 35.53925, lng: -92.14626, note: "Slips, fuel, rentals. Next to Shiloh Park." },
+      { name: "Shiloh Park", type: "park", lat: 35.53758, lng: -92.14599, note: "Campground, marina, swim beach on the lower lake." },
+      { name: "Heber Springs Marina", type: "marina", lat: 35.50202, lng: -92.05932, note: "Slips, rentals, store, scuba. 99 Park Rd. 501-362-8838" },
+      { name: "Heber Springs Park", type: "park", lat: 35.50400, lng: -92.06650, note: "114 sites, ramp, swim beach, playground. 89 Park Rd." },
+      { name: "Heber Springs Park Ramp", type: "ramp", lat: 35.50320, lng: -92.06380, note: "Public launch at Heber Springs Park." },
+      { name: "Heber Springs Swim Beach", type: "swim", lat: 35.50240, lng: -92.06820, note: "Designated swim area. No pets in day-use swim beaches." },
+      { name: "Eden Isle Marina", type: "marina", lat: 35.50590, lng: -92.09570, note: "10 Yacht Harbor Rd, Heber Springs. 501-362-2232" },
+      { name: "Dam Site Marina", type: "marina", lat: 35.52950, lng: -92.00760, note: "Slips, fuel, store by Dam Site Park. 501-362-2333" },
+      { name: "Dam Site Park", type: "park", lat: 35.52200, lng: -91.99760, note: "211 sites, ramp, swim area. 315 Heber Springs Rd N. Year-round." },
+      { name: "Dam Site Ramp", type: "ramp", lat: 35.52420, lng: -92.00480, note: "Launch near the dam / lower lake." },
+      { name: "Greers Ferry Dam", type: "park", lat: 35.52091, lng: -91.99320, note: "Dam and powerhouse. Little Red River tailwater below." },
+      { name: "William Carl Garner Visitor Center", type: "park", lat: 35.52150, lng: -91.99940, note: "700 Heber Springs Rd N. 501-362-9067" },
+      { name: "John F. Kennedy Park", type: "park", lat: 35.51321, lng: -91.99684, note: "375 Hatchery Rd. Campground + hatchery + tailwater access." },
+      { name: "John F. Kennedy Ramp", type: "ramp", lat: 35.51480, lng: -91.99520, note: "Launch near the hatchery / dam tailwater." },
+      { name: "Old Highway 25 Park", type: "park", lat: 35.53946, lng: -92.01313, note: "1500 Old Highway 25, Tumbling Shoals. Camp + swim + ramp." },
+      { name: "Cherokee Park", type: "park", lat: 35.55737, lng: -92.07674, note: "475 Cherokee Park Rd. 30 sites and launch, NE lower lake." },
+      { name: "Cherokee Park Ramp", type: "ramp", lat: 35.55620, lng: -92.07890, note: "Public launch at Cherokee Recreation Area." },
+      { name: "Devils Fork Park", type: "park", lat: 35.58463, lng: -92.17853, note: "73 Devils Fork Rd, Greers Ferry. Year-round sections." },
+      { name: "Devils Fork Ramp", type: "ramp", lat: 35.58320, lng: -92.18080, note: "Multi-lane concrete ramp with docks." },
+      { name: "Mill Creek Park", type: "park", lat: 35.58286, lng: -92.21821, note: "Upper-lake Corps park west of Greers Ferry." },
+      { name: "Hill Creek Park", type: "park", lat: 35.61091, lng: -92.14932, note: "474 Hill Creek Rd, Edgemont. Upper-lake north shore." },
+      { name: "Hill Creek Marina", type: "marina", lat: 35.60897, lng: -92.14849, note: "Marina next to Hill Creek Recreation Area." },
+      { name: "Sugar Loaf Park", type: "park", lat: 35.54261, lng: -92.27057, note: "1389 Resort Rd, Higden. Camp, swim, ramp, marina." },
+      { name: "Sugar Loaf Mountain", type: "park", lat: 35.56119, lng: -92.26627, note: "Island / mountain landmark on the upper lake." },
+      { name: "Choctaw Park", type: "park", lat: 35.53286, lng: -92.38043, note: "3848 Hwy 330 E, Clinton. West end of the upper lake." },
+      { name: "Choctaw / Furgerson's Marina", type: "marina", lat: 35.53380, lng: -92.37820, note: "3850 Hwy 330 E. 501-745-2666" },
+      { name: "Cove Creek Park", type: "park", lat: 35.46177, lng: -92.15386, note: "South end of the lower lake. Seasonal Corps park." },
+      { name: "Fairfield Bay Marina", type: "marina", lat: 35.59890, lng: -92.26840, note: "4350 AR 330 S, Fairfield Bay. 501-884-6030" }
+    ];
+
+    const colors = { marina: "#3db8ff", ramp: "#7ed07a", park: "#e8c56b", swim: "#79b8ff" };
+    const map = L.map("map", { zoomControl: true }).setView([35.53, -92.17], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap"
+    }).addTo(map);
+
+    const markers = [];
+    places.forEach((p) => {
+      const m = L.circleMarker([p.lat, p.lng], {
+        radius: p.type === "marina" ? 9 : 7,
+        color: "#08323c",
+        weight: 1,
+        fillColor: colors[p.type],
+        fillOpacity: 0.95
+      }).addTo(map);
+      m.bindPopup(
+        `<strong>${p.name}</strong><br>${p.note}<br>
+         <a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>`
+      );
+      m.place = p;
+      markers.push(m);
+    });
+
+    function render(type) {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      places.filter((p) => type === "all" || p.type === type).forEach((p) => {
+        const el = document.createElement("div");
+        el.className = "item";
+        el.innerHTML = `
+          <div class="dot" style="background:${colors[p.type]}"></div>
+          <div>
+            <h3>${p.name}</h3>
+            <p>${p.note}</p>
+            <a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Apple Maps</a>
+          </div>
+          <div class="actions">
+            <button data-go="${p.name}">Show</button>
+          </div>`;
+        list.appendChild(el);
+      });
+      markers.forEach((m) => {
+        const show = type === "all" || m.place.type === type;
+        if (show) m.addTo(map); else map.removeLayer(m);
+      });
+    }
+    render("all");
+
+    document.querySelector(".filters").addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("on"));
+      chip.classList.add("on");
+      render(chip.dataset.type);
+    });
+
+    document.getElementById("list").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-go]");
+      if (!btn) return;
+      const p = places.find((x) => x.name === btn.dataset.go);
+      map.setView([p.lat, p.lng], 15);
+      const mk = markers.find((m) => m.place.name === p.name);
+      if (mk) mk.openPopup();
+    });
+
+    document.getElementById("locate").addEventListener("click", () => {
+      if (!navigator.geolocation) return alert("Location not available on this device.");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords;
+          L.circleMarker([latitude, longitude], { radius: 8, fillColor: "#fff", color: "#e8c56b", weight: 2, fillOpacity: 1 }).addTo(map)
+            .bindPopup("You are here").openPopup();
+          map.setView([latitude, longitude], 13);
+        },
+        () => alert("Could not get location. Check Location permission for Safari.")
+      );
+    });
+
+    const sheet = document.getElementById("sheet");
+    const toggle = document.getElementById("toggleSheet");
+    const states = ["min", "mid", "full"];
+    function setSheet(state) {
+      sheet.classList.remove("min", "mid", "full");
+      sheet.classList.add(state);
+      toggle.textContent = state === "min" ? "Show list" : "Hide list";
+    }
+    toggle.addEventListener("click", () => {
+      setSheet(sheet.classList.contains("min") ? "mid" : "min");
+    });
+    document.getElementById("handle").addEventListener("click", () => {
+      const cur = states.find((s) => sheet.classList.contains(s)) || "mid";
+      const next = states[(states.indexOf(cur) + 1) % states.length];
+      setSheet(next);
+    });
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  </script>
+</body>
+</html>
