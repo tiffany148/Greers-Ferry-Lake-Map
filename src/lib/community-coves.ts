@@ -94,7 +94,7 @@ export const addCommunityCove = createServerFn({ method: "POST" })
         ) {
           return {
             ok: false,
-            error: `That's right next to \u201c${row.name}\u201d. Zoom or move the pin a little.`,
+            error: `That's right next to “${row.name}”. Zoom or move the pin a little.`,
           };
         }
       }

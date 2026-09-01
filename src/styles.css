@@ -63,6 +63,7 @@
   }
 }
 
+/* Leaflet chrome — match the field-guide panel, not default white */
 .leaflet-container {
   background: #1a2a32;
   font-family: var(--font-sans);
@@ -125,6 +126,8 @@
   cursor: crosshair !important;
 }
 
+/* Custom place markers — size/anchor live on the DivIcon, not a CSS translate.
+   A 0×0 icon + translate(-50%,-100%) drifts off the lat/lng while zooming. */
 .lf-marker {
   position: relative;
   width: 22px;
@@ -301,4 +304,17 @@
   border: 2px solid var(--color-bg);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
   cursor: pointer;
+}
+
+.measure-line {
+  stroke: var(--color-accent);
+  stroke-width: 2;
+  stroke-dasharray: 6 5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lf-pin,
+  .lf-marker.is-selected .lf-pin {
+    transition: none;
+  }
 }
