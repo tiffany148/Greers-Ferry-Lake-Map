@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+
+   <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
@@ -44,179 +45,15 @@
     }
     .sheet {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000;
-      max-height: 48vh; overflow: auto;
+      height: 42vh;
+      display: flex; flex-direction: column;
       background: rgba(11,61,77,.96); backdrop-filter: blur(10px);
-      border-radius: 18px 18px 0 0; padding: 10px 12px calc(16px + env(safe-area-inset-bottom));
+      border-radius: 18px 18px 0 0; padding: 6px 12px calc(12px + env(safe-area-inset-bottom));
       box-shadow: 0 -8px 30px rgba(0,0,0,.35);
+      transition: height .22s ease;
     }
-    .handle { width: 42px; height: 4px; background: #2a6b7c; border-radius: 99px; margin: 2px auto 10px; }
-    .filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
-    .chip {
-      flex: 0 0 auto; border: 1px solid #1f6276; background: var(--card);
-      color: var(--text); border-radius: 999px; padding: 6px 10px; font-size: 12px;
-    }
-    .chip.on { background: var(--accent); color: #08323c; font-weight: 700; }
-    .list { display: grid; gap: 8px; }
-    .item {
-      background: var(--card); border-radius: 12px; padding: 10px 12px;
-      display: flex; gap: 10px; align-items: flex-start;
-    }
-    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; }
-    .item h3 { margin: 0; font-size: 14px; }
-    .item p { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
-    .item a { color: var(--accent); font-size: 12px; text-decoration: none; }
-    .actions { margin-left: auto; display: flex; flex-direction: column; gap: 6px; }
-    .actions button {
-      background: #0b3d4d; color: var(--accent); border: 1px solid #2a6b7c;
-      border-radius: 8px; padding: 6px 8px; font-size: 11px;
-    }
-    .leaflet-popup-content-wrapper { background: #0b3d4d; color: #f4f7f8; border-radius: 12px; }
-    .leaflet-popup-tip { background: #0b3d4d; }
-    .leaflet-popup-content { margin: 10px 12px; }
-    .leaflet-popup-content a { color: #7ed0c8; }
-    .note { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
-  </style>
-</head>
-<body>
-  <div id="map"></div>
-  <header>
-    <div class="brand">
-      <h1>Greers Ferry Lake</h1>
-      <p>Find Your Escape · ramps, marinas & parks</p>
-    </div>
-    <button class="tool" id="locate">My location</button>
-  </header>
-  <section class="sheet">
-    <div class="handle"></div>
-    <div class="filters">
-      <button class="chip on" data-type="all">All</button>
-      <button class="chip" data-type="marina">Marinas</button>
-      <button class="chip" data-type="ramp">Boat ramps</button>
-      <button class="chip" data-type="park">Parks</button>
-      <button class="chip" data-type="swim">Swim</button>
-    </div>
-    <div class="list" id="list"></div>
-    <p class="note">
-      Day-use / launch fees often apply at Corps parks ($5 vehicle or $40 annual). Pets are not allowed in day-use swim areas.
-      Lake level: <a href="https://www.swl-wc.usace.army.mil/" target="_blank" rel="noopener">USACE</a> ·
-      Camping: <a href="https://www.recreation.gov" target="_blank" rel="noopener">Recreation.gov</a>
-    </p>
-  </section>
-
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
-    const places = [
-      { name: "Lacey's Narrows Marina", type: "marina", lat: 35.56056, lng: -92.19560, note: "Full-service marina, sales & rentals. 7674 Edgemont Rd, Greers Ferry. 501-825-6214" },
-      { name: "Narrows Park Ramp", type: "ramp", lat: 35.5578, lng: -92.1975, note: "Corps ramp by the Narrows / Edgemont Rd. Seasonal camping nearby." },
-      { name: "Narrows Park", type: "park", lat: 35.5565, lng: -92.1998, note: "58 electric sites, dump station, picnic shelter. 7699 Edgemont Rd." },
-      { name: "Heber Springs Marina", type: "marina", lat: 35.4989, lng: -92.0665, note: "Slips, rentals, store. Near Heber Springs Park." },
-      { name: "Heber Springs Park", type: "park", lat: 35.50124, lng: -92.07577, note: "114 sites, ramp, swim beach, playground. Year-round area nearby." },
-      { name: "Heber Springs Park Ramp", type: "ramp", lat: 35.5032, lng: -92.0728, note: "Public launch at Heber Springs Park." },
-      { name: "Heber Springs Swim Beach", type: "swim", lat: 35.5004, lng: -92.0739, note: "Designated swim area. No pets in day-use swim beaches." },
-      { name: "Dam Site Park", type: "park", lat: 35.52085, lng: -92.01061, note: "211 sites, marina, swim area. 315 Heber Springs Rd N. Year-round." },
-      { name: "Dam Site Ramp", type: "ramp", lat: 35.5188, lng: -92.0124, note: "Launch near the dam / lower lake." },
-      { name: "John F. Kennedy Park Ramp", type: "ramp", lat: 35.5126, lng: -91.9968, note: "375 Hatchery Rd, Heber Springs. Principal lower-lake launch." },
-      { name: "William Carl Garner Visitor Center", type: "park", lat: 35.5216, lng: -91.9994, note: "Exhibits by the dam. 700 Heber Springs Rd N. 501-362-9067" },
-      { name: "Eden Isle Marina", type: "marina", lat: 35.4875, lng: -92.0922, note: "Full-service marina on Eden Isle." },
-      { name: "Devils Fork Park", type: "park", lat: 35.5204, lng: -92.2178, note: "South-central arm. Year-round camping sections." },
-      { name: "Devils Fork Ramp", type: "ramp", lat: 35.5220, lng: -92.2160, note: "Multi-lane concrete ramp with docks." },
-      { name: "Choctaw Park", type: "park", lat: 35.5845, lng: -92.3850, note: "Upper west / Middle Fork near Clinton. Year-round." },
-      { name: "Choctaw Park Ramp", type: "ramp", lat: 35.5858, lng: -92.3822, note: "3848 Hwy 330 E, Clinton. Two-lane ramp + marina." },
-      { name: "Cherokee Park", type: "park", lat: 35.5890, lng: -92.1480, note: "North-central shore via Drasco. 475 Cherokee Park Rd." },
-      { name: "Cherokee Park Ramp", type: "ramp", lat: 35.5872, lng: -92.1495, note: "Public launch, central-north shore." },
-      { name: "Sugar Loaf Park", type: "park", lat: 35.4990, lng: -92.3120, note: "Near Sugar Loaf Mountain island. Swim + ramp." },
-      { name: "Sugar Loaf Ramp", type: "ramp", lat: 35.5006, lng: -92.3100, note: "Two-lane ramp off Resort Road." },
-      { name: "Sugar Loaf Swim Beach", type: "swim", lat: 35.4982, lng: -92.3135, note: "Designated swim area." },
-      { name: "Shiloh Park", type: "park", lat: 35.5350, lng: -92.1550, note: "Campground, marina, swim beach." },
-      { name: "Hill Creek / Smith Hill Ramp", type: "ramp", lat: 35.5750, lng: -92.0550, note: "Northeast section, multi-lane ramp." },
-      { name: "Old Highway 25 Park", type: "park", lat: 35.5355, lng: -92.0280, note: "Campground + designated swim area." },
-      { name: "Cove Creek Park", type: "park", lat: 35.4700, lng: -92.1600, note: "Seasonal Corps park with swim area." },
-      { name: "Fairfield Bay Marina area", type: "marina", lat: 35.6050, lng: -92.2770, note: "North / Five Fingers side of the lake." },
-      { name: "Sugar Loaf Mountain Island", type: "park", lat: 35.5235, lng: -92.3380, note: "Landmark island rising from the lake; hiking from park access." }
-    ];
-
-    const colors = { marina: "#3db8ff", ramp: "#7ed07a", park: "#e8c56b", swim: "#79b8ff" };
-    const map = L.map("map", { zoomControl: true }).setView([35.53, -92.17], 11);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap"
-    }).addTo(map);
-
-    const markers = [];
-    places.forEach((p) => {
-      const m = L.circleMarker([p.lat, p.lng], {
-        radius: p.type === "marina" ? 9 : 7,
-        color: "#08323c",
-        weight: 1,
-        fillColor: colors[p.type],
-        fillOpacity: 0.95
-      }).addTo(map);
-      m.bindPopup(
-        `<strong>${p.name}</strong><br>${p.note}<br>
-         <a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>`
-      );
-      m.place = p;
-      markers.push(m);
-    });
-
-    function render(type) {
-      const list = document.getElementById("list");
-      list.innerHTML = "";
-      places.filter((p) => type === "all" || p.type === type).forEach((p) => {
-        const el = document.createElement("div");
-        el.className = "item";
-        el.innerHTML = `
-          <div class="dot" style="background:${colors[p.type]}"></div>
-          <div>
-            <h3>${p.name}</h3>
-            <p>${p.note}</p>
-            <a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Apple Maps</a>
-          </div>
-          <div class="actions">
-            <button data-go="${p.name}">Show</button>
-          </div>`;
-        list.appendChild(el);
-      });
-      markers.forEach((m) => {
-        const show = type === "all" || m.place.type === type;
-        if (show) m.addTo(map); else map.removeLayer(m);
-      });
-    }
-    render("all");
-
-    document.querySelector(".filters").addEventListener("click", (e) => {
-      const chip = e.target.closest(".chip");
-      if (!chip) return;
-      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("on"));
-      chip.classList.add("on");
-      render(chip.dataset.type);
-    });
-
-    document.getElementById("list").addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-go]");
-      if (!btn) return;
-      const p = places.find((x) => x.name === btn.dataset.go);
-      map.setView([p.lat, p.lng], 15);
-      const mk = markers.find((m) => m.place.name === p.name);
-      if (mk) mk.openPopup();
-    });
-
-    document.getElementById("locate").addEventListener("click", () => {
-      if (!navigator.geolocation) return alert("Location not available on this device.");
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords;
-          L.circleMarker([latitude, longitude], { radius: 8, fillColor: "#fff", color: "#e8c56b", weight: 2, fillOpacity: 1 }).addTo(map)
-            .bindPopup("You are here").openPopup();
-          map.setView([latitude, longitude], 13);
-        },
-        () => alert("Could not get location. Check Location permission for Safari.")
-      );
-    });
-
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
-    }
-  </script>
-</body>
-</html>
+    .sheet.mid { height: 42vh; }
+    .sheet.full { height: 78vh; }
+    .sheet.min { height: 92px; }
+    .handle-wrap { padding: 8px 0 6px; touch-action: none; }
+    .handle
