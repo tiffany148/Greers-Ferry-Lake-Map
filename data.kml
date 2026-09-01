@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Greers Ferry Lake Data</name>
+    <description>KML data for Greers Ferry Lake Map</description>
+    <!-- Your KML content will go here -->
+  </Document>
+</kml>
