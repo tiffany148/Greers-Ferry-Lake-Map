@@ -263,6 +263,11 @@
   mix-blend-mode: multiply;
 }
 
+/* Street / place name tiles sit above sat, topo, and historical overlays. */
+.lf-street-labels {
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.85)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.55));
+}
+
 .lf-name {
   position: absolute;
   top: calc(100% + 2px);

@@ -48,8 +48,19 @@ const TILES: Record<MapLayerId, { url: string; attr: string; maxZoom: number }> 
   },
 };
 
-/** Road / place labels that sit above basemap + overlays so names stay readable when zoomed in. */
-const LABEL_TILE = {
+/**
+ * Street / place name overlays (Esri reference). Sit above basemap + geology /
+ * historical panes so names stay readable when zoomed in. Skipped on the Map
+ * basemap, which already draws its own labels.
+ */
+const PLACE_LABEL_TILE = {
+  url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+  attr: "Labels © Esri",
+  minZoom: 12,
+  maxZoom: 19,
+} as const;
+
+const STREET_LABEL_TILE = {
   url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
   attr: "Labels © Esri",
   minZoom: 13,
@@ -187,16 +198,25 @@ function createHistoricalLayer(L: LeafletNS, opacity: number): TileLayer {
   return layer;
 }
 
-function createLabelLayer(L: LeafletNS): TileLayer {
-  return L.tileLayer(LABEL_TILE.url, {
-    pane: "labels",
-    attribution: LABEL_TILE.attr,
-    minZoom: LABEL_TILE.minZoom,
-    maxZoom: LABEL_TILE.maxZoom,
-    opacity: 0.92,
+function createLabelLayers(L: LeafletNS): { places: TileLayer; streets: TileLayer } {
+  const common = {
+    pane: "labels" as const,
+    attribution: STREET_LABEL_TILE.attr,
+    maxZoom: STREET_LABEL_TILE.maxZoom,
+    opacity: 0.95,
     ...TILE_OPTS,
     className: "lf-street-labels",
-  });
+  };
+  return {
+    places: L.tileLayer(PLACE_LABEL_TILE.url, {
+      ...common,
+      minZoom: PLACE_LABEL_TILE.minZoom,
+    }),
+    streets: L.tileLayer(STREET_LABEL_TILE.url, {
+      ...common,
+      minZoom: STREET_LABEL_TILE.minZoom,
+    }),
+  };
 }
 
 export function LakeMap({
@@ -227,7 +247,9 @@ export function LakeMap({
   const baseLayerRef = useRef<TileLayer | null>(null);
   const histLayerRef = useRef<TileLayer | null>(null);
   const geoLayerRef = useRef<TileLayer | null>(null);
-  const labelLayerRef = useRef<TileLayer | null>(null);
+  const placeLabelRef = useRef<TileLayer | null>(null);
+  const streetLabelRef = useRef<TileLayer | null>(null);
+  const baseLayerIdRef = useRef<MapLayerId>(layer);
   const draftRef = useRef<Marker | null>(null);
   const measurePts = useRef<{ lat: number; lon: number }[]>([]);
   const measureLine = useRef<Polyline | null>(null);
@@ -251,6 +273,7 @@ export function LakeMap({
   addModeRef.current = addMode;
   addKindRef.current = addKind;
   placesRef.current = places;
+  baseLayerIdRef.current = layer;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -304,7 +327,9 @@ export function LakeMap({
 
       histLayerRef.current = createHistoricalLayer(L, HISTORICAL_DEFAULT_OPACITY);
       geoLayerRef.current = createGeologyLayer(L, 0.55);
-      labelLayerRef.current = createLabelLayer(L);
+      const labelLayers = createLabelLayers(L);
+      placeLabelRef.current = labelLayers.places;
+      streetLabelRef.current = labelLayers.streets;
 
       for (const r of REGION_LABELS) {
         const icon = L.divIcon({
@@ -328,20 +353,31 @@ export function LakeMap({
         if (visibleRef.current.has(place.id)) m.addTo(markers);
       }
 
+      const syncLabels = () => {
+        const z = map.getZoom();
+        // Map basemap already includes street names — skip the overlay there.
+        const wantLabels = baseLayerIdRef.current !== "streets";
+        const place = placeLabelRef.current;
+        const street = streetLabelRef.current;
+        if (place) {
+          const on = wantLabels && z >= PLACE_LABEL_TILE.minZoom;
+          if (on && !map.hasLayer(place)) place.addTo(map);
+          if (!on && map.hasLayer(place)) map.removeLayer(place);
+        }
+        if (street) {
+          const on = wantLabels && z >= STREET_LABEL_TILE.minZoom;
+          if (on && !map.hasLayer(street)) street.addTo(map);
+          if (!on && map.hasLayer(street)) map.removeLayer(street);
+        }
+      };
+
       const syncChrome = () => {
         const z = map.getZoom();
         if (regions) {
           if (z < 13) regions.addTo(map);
           else map.removeLayer(regions);
         }
-        const labels = labelLayerRef.current;
-        if (labels) {
-          if (z >= LABEL_TILE.minZoom) {
-            if (!map.hasLayer(labels)) labels.addTo(map);
-          } else if (map.hasLayer(labels)) {
-            map.removeLayer(labels);
-          }
-        }
+        syncLabels();
         for (const place of placesRef.current) {
           const mk = markersRef.current.get(place.id);
           if (!mk) continue;
@@ -400,7 +436,8 @@ export function LakeMap({
       baseLayerRef.current = null;
       histLayerRef.current = null;
       geoLayerRef.current = null;
-      labelLayerRef.current = null;
+      placeLabelRef.current = null;
+      streetLabelRef.current = null;
     };
   }, []);
 
@@ -461,6 +498,21 @@ export function LakeMap({
     window.setTimeout(() => {
       if (prev && prev !== next && map.hasLayer(prev)) map.removeLayer(prev);
     }, 1200);
+    // Toggle street/place label overlays when switching basemap (Map already has names).
+    const z = map.getZoom();
+    const wantLabels = layer !== "streets";
+    const place = placeLabelRef.current;
+    const street = streetLabelRef.current;
+    if (place) {
+      const on = wantLabels && z >= PLACE_LABEL_TILE.minZoom;
+      if (on && !map.hasLayer(place)) place.addTo(map);
+      if (!on && map.hasLayer(place)) map.removeLayer(place);
+    }
+    if (street) {
+      const on = wantLabels && z >= STREET_LABEL_TILE.minZoom;
+      if (on && !map.hasLayer(street)) street.addTo(map);
+      if (!on && map.hasLayer(street)) map.removeLayer(street);
+    }
   }, [layer, mapReady]);
 
   useEffect(() => {
