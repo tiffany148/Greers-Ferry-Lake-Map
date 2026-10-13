@@ -886,6 +886,20 @@ export const PLACES: Place[] = [
     importance: 2,
   },
   {
+    id: "stark",
+    name: "Stark",
+    kind: "landmark",
+    lat: 35.552,
+    lon: -92.135,
+    region: "narrows",
+    aliases: ["Stark AR", "Stark, AR"],
+    description:
+      "Pre-dam valley community near Budd Creek and the Little Red River, shown on USGS Mountain View sheets before the reservoir. The old roads and dismantled railroad that served Stark still print on the Before the dam overlay — most of the town site is under the lake now.",
+    access: "Boat over the Narrows / Budd Creek arm — look for the historical label",
+    approx: true,
+    importance: 3,
+  },
+  {
     id: "fairfield-bay",
     name: "Fairfield Bay",
     kind: "town",

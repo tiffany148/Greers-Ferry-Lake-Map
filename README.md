@@ -35,7 +35,8 @@ Do not commit `node_modules` — run `npm install` after cloning.
 - Pins for islands, coves, Corps parks, marinas, towns, and landmarks
 - Search, region chips (Upper Lake, The Narrows, Lower Lake), and a distance ruler
 - **Add pin** — cove names, water depth, temperature, hazards, and custom pins (shared when a database is configured; in-memory locally)
-- **Before the dam** — georeferenced USGS historical topos (Little Red River valley before the reservoir)
+- **Before the dam** — georeferenced USGS historical topos (Little Red River valley before the reservoir), including Stark and the old roads / dismantled railway on clearer 1930+ reprints
+- Street / road labels appear when you zoom in and stay visible through overlays
 - **Geology** — Macrostrat / USGS bedrock overlay with fade control
 - Saved hearts stay in the browser (`localStorage`)
 
