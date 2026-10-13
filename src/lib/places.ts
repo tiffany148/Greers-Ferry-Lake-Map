@@ -5,7 +5,11 @@ export type PlaceKind =
   | "marina"
   | "point"
   | "town"
-  | "landmark";
+  | "landmark"
+  | "depth"
+  | "temperature"
+  | "hazard"
+  | "pin";
 
 export type RegionId = "upper" | "narrows" | "lower";
 
@@ -23,6 +27,9 @@ export type Place = {
   approx?: boolean;
   importance: 1 | 2 | 3;
   community?: boolean;
+  /** Shared field report (depth / temp / hazard / custom pin). */
+  field?: boolean;
+  fieldValue?: string;
 };
 
 export const KIND_LABEL: Record<PlaceKind, string> = {
@@ -33,6 +40,10 @@ export const KIND_LABEL: Record<PlaceKind, string> = {
   point: "Point",
   town: "Town",
   landmark: "Landmark",
+  depth: "Depth",
+  temperature: "Temperature",
+  hazard: "Hazard",
+  pin: "Pin",
 };
 
 export const KIND_ORDER: PlaceKind[] = [
@@ -43,6 +54,10 @@ export const KIND_ORDER: PlaceKind[] = [
   "point",
   "town",
   "landmark",
+  "depth",
+  "temperature",
+  "hazard",
+  "pin",
 ];
 
 export const REGION_LABEL: Record<RegionId, string> = {
@@ -871,6 +886,20 @@ export const PLACES: Place[] = [
     importance: 2,
   },
   {
+    id: "stark",
+    name: "Stark",
+    kind: "landmark",
+    lat: 35.552,
+    lon: -92.135,
+    region: "narrows",
+    aliases: ["Stark AR", "Stark, AR"],
+    description:
+      "Pre-dam valley community near Budd Creek and the Little Red River, shown on USGS Mountain View sheets before the reservoir. The old roads and dismantled railroad that served Stark still print on the Before the dam overlay — most of the town site is under the lake now.",
+    access: "Boat over the Narrows / Budd Creek arm — look for the historical label",
+    approx: true,
+    importance: 3,
+  },
+  {
     id: "fairfield-bay",
     name: "Fairfield Bay",
     kind: "town",
@@ -1052,5 +1081,43 @@ export function communityCoveToPlace(row: {
     access: "Community pin — tap the map near the pocket you know",
     importance: 2,
     community: true,
+  };
+}
+
+export function fieldPinToPlace(row: {
+  id: number;
+  kind: "depth" | "temperature" | "hazard" | "pin";
+  title: string;
+  value: string | null;
+  lat: number;
+  lon: number;
+  note: string | null;
+}): Place {
+  const region = regionFromPoint(row.lat, row.lon);
+  const value = row.value?.trim() || undefined;
+  const note = row.note?.trim();
+  const blurb: Record<typeof row.kind, string> = {
+    depth: value
+      ? `Reported water depth: ${value}. Shared field reading.`
+      : "A shared water-depth reading on the lake.",
+    temperature: value
+      ? `Reported water temperature: ${value}. Shared field reading.`
+      : "A shared water-temperature reading on the lake.",
+    hazard: "A shared hazard mark — use care and your own judgment on the water.",
+    pin: "A shared custom pin dropped by someone on the lake.",
+  };
+  return {
+    id: `field-${row.kind}-${row.id}`,
+    name: row.title,
+    kind: row.kind,
+    lat: row.lat,
+    lon: row.lon,
+    region,
+    description: note || blurb[row.kind],
+    amenities: value ? [value] : undefined,
+    access: "Field pin — shared across every device",
+    importance: row.kind === "hazard" ? 3 : 2,
+    field: true,
+    fieldValue: value,
   };
 }

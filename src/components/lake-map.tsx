@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap, Marker, Polyline, TileLayer } from "leaflet";
-import { HISTORICAL_CREDIT, historicalTileUrl } from "@/lib/historical-maps";
-import { LAKE_BOUNDS, LAKE_CENTER, REGION_LABELS, type Place } from "@/lib/places";
+import { GEOLOGY_CREDIT, GEOLOGY_TILE_URL } from "@/lib/geology-maps";
+import { HISTORICAL_CREDIT, HISTORICAL_DEFAULT_OPACITY, historicalTileUrl } from "@/lib/historical-maps";
+import { KIND_LABEL, LAKE_BOUNDS, LAKE_CENTER, REGION_LABELS, type Place, type PlaceKind } from "@/lib/places";
 import { formatMiles, haversineMiles } from "@/lib/utils";
 
 export type MapLayerId = "satellite" | "topo" | "streets";
+export type AddPinKind = "cove" | "depth" | "temperature" | "hazard" | "pin";
 
 type LeafletNS = typeof import("leaflet");
 
@@ -19,10 +21,13 @@ type Props = {
   flyRequest: number;
   fitRequest: number;
   addMode: boolean;
+  addKind: AddPinKind;
   draftPoint: { lat: number; lon: number } | null;
   onPickPoint: (lat: number, lon: number) => void;
   historical: boolean;
   histOpacity: number;
+  geology: boolean;
+  geoOpacity: number;
 };
 
 const TILES: Record<MapLayerId, { url: string; attr: string; maxZoom: number }> = {
@@ -37,11 +42,30 @@ const TILES: Record<MapLayerId, { url: string; attr: string; maxZoom: number }> 
     maxZoom: 18,
   },
   streets: {
-    url: "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
-    attr: "© OpenStreetMap © CARTO",
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    attr: "Tiles © Esri",
     maxZoom: 19,
   },
 };
+
+/**
+ * Street / place name overlays (Esri reference). Sit above basemap + geology /
+ * historical panes so names stay readable when zoomed in. Skipped on the Map
+ * basemap, which already draws its own labels.
+ */
+const PLACE_LABEL_TILE = {
+  url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+  attr: "Labels © Esri",
+  minZoom: 12,
+  maxZoom: 19,
+} as const;
+
+const STREET_LABEL_TILE = {
+  url: "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+  attr: "Labels © Esri",
+  minZoom: 13,
+  maxZoom: 19,
+} as const;
 
 const TILE_OPTS = {
   updateWhenZooming: true,
@@ -54,7 +78,8 @@ const TILE_OPTS = {
 const PIN = 22;
 
 function labeled(place: Place, zoom: number) {
-  if (place.community && zoom >= 12.5) return true;
+  if (place.field && place.kind === "hazard" && zoom >= 12) return true;
+  if ((place.community || place.field) && zoom >= 12.5) return true;
   if (zoom >= 14) return true;
   if (zoom >= 13 && place.importance >= 2) return true;
   if (zoom >= 12.25 && place.importance >= 3 && (place.kind === "island" || place.kind === "landmark"))
@@ -62,12 +87,48 @@ function labeled(place: Place, zoom: number) {
   return false;
 }
 
+function markerLabel(place: Place) {
+  if (place.field && place.fieldValue && (place.kind === "depth" || place.kind === "temperature")) {
+    return place.fieldValue;
+  }
+  return place.name;
+}
+
 function markerHtml(place: Place) {
-  const local = place.community ? " lf-marker--community" : "";
+  const local = place.community || place.field ? " lf-marker--community" : "";
   return `<div class="lf-marker lf-marker--${place.kind}${local}" data-place="${place.id}">
     <span class="lf-pin"></span>
-    <span class="lf-name">${escapeHtml(place.name)}</span>
+    <span class="lf-name">${escapeHtml(markerLabel(place))}</span>
   </div>`;
+}
+
+function draftKindToPlaceKind(kind: AddPinKind): PlaceKind {
+  return kind === "cove" ? "cove" : kind;
+}
+
+function draftLabel(kind: AddPinKind) {
+  if (kind === "cove") return "New cove";
+  if (kind === "depth") return "Depth";
+  if (kind === "temperature") return "Temp";
+  if (kind === "hazard") return "Hazard";
+  return "New pin";
+}
+
+function createGeologyLayer(L: LeafletNS, opacity: number): TileLayer {
+  return L.tileLayer(GEOLOGY_TILE_URL, {
+    opacity,
+    pane: "geology",
+    attribution: GEOLOGY_CREDIT,
+    minZoom: 10,
+    maxZoom: 18,
+    maxNativeZoom: 14,
+    tileSize: 256,
+    updateWhenZooming: false,
+    updateWhenIdle: true,
+    keepBuffer: 2,
+    detectRetina: false,
+    className: "lf-geology-sheet",
+  });
 }
 
 function escapeHtml(s: string) {
@@ -137,6 +198,27 @@ function createHistoricalLayer(L: LeafletNS, opacity: number): TileLayer {
   return layer;
 }
 
+function createLabelLayers(L: LeafletNS): { places: TileLayer; streets: TileLayer } {
+  const common = {
+    pane: "labels" as const,
+    attribution: STREET_LABEL_TILE.attr,
+    maxZoom: STREET_LABEL_TILE.maxZoom,
+    opacity: 0.95,
+    ...TILE_OPTS,
+    className: "lf-street-labels",
+  };
+  return {
+    places: L.tileLayer(PLACE_LABEL_TILE.url, {
+      ...common,
+      minZoom: PLACE_LABEL_TILE.minZoom,
+    }),
+    streets: L.tileLayer(STREET_LABEL_TILE.url, {
+      ...common,
+      minZoom: STREET_LABEL_TILE.minZoom,
+    }),
+  };
+}
+
 export function LakeMap({
   places,
   visibleIds,
@@ -148,10 +230,13 @@ export function LakeMap({
   flyRequest,
   fitRequest,
   addMode,
+  addKind,
   draftPoint,
   onPickPoint,
   historical,
   histOpacity,
+  geology,
+  geoOpacity,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -161,6 +246,10 @@ export function LakeMap({
   const regionGroupRef = useRef<LayerGroup | null>(null);
   const baseLayerRef = useRef<TileLayer | null>(null);
   const histLayerRef = useRef<TileLayer | null>(null);
+  const geoLayerRef = useRef<TileLayer | null>(null);
+  const placeLabelRef = useRef<TileLayer | null>(null);
+  const streetLabelRef = useRef<TileLayer | null>(null);
+  const baseLayerIdRef = useRef<MapLayerId>(layer);
   const draftRef = useRef<Marker | null>(null);
   const measurePts = useRef<{ lat: number; lon: number }[]>([]);
   const measureLine = useRef<Polyline | null>(null);
@@ -171,6 +260,7 @@ export function LakeMap({
   const selectedRef = useRef(selectedId);
   const measureRef = useRef(measure);
   const addModeRef = useRef(addMode);
+  const addKindRef = useRef(addKind);
   const placesRef = useRef(places);
   const [mapReady, setMapReady] = useState(false);
 
@@ -181,7 +271,9 @@ export function LakeMap({
   selectedRef.current = selectedId;
   measureRef.current = measure;
   addModeRef.current = addMode;
+  addKindRef.current = addKind;
   placesRef.current = places;
+  baseLayerIdRef.current = layer;
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -214,6 +306,12 @@ export function LakeMap({
       const histPane = map.createPane("historical");
       histPane.style.zIndex = "350";
       histPane.style.pointerEvents = "none";
+      const geoPane = map.createPane("geology");
+      geoPane.style.zIndex = "340";
+      geoPane.style.pointerEvents = "none";
+      const labelsPane = map.createPane("labels");
+      labelsPane.style.zIndex = "450";
+      labelsPane.style.pointerEvents = "none";
 
       const spec = TILES.satellite;
       baseLayerRef.current = L.tileLayer(spec.url, {
@@ -227,7 +325,11 @@ export function LakeMap({
       const regions = L.layerGroup().addTo(map);
       regionGroupRef.current = regions;
 
-      histLayerRef.current = createHistoricalLayer(L, 0.72);
+      histLayerRef.current = createHistoricalLayer(L, HISTORICAL_DEFAULT_OPACITY);
+      geoLayerRef.current = createGeologyLayer(L, 0.55);
+      const labelLayers = createLabelLayers(L);
+      placeLabelRef.current = labelLayers.places;
+      streetLabelRef.current = labelLayers.streets;
 
       for (const r of REGION_LABELS) {
         const icon = L.divIcon({
@@ -251,12 +353,31 @@ export function LakeMap({
         if (visibleRef.current.has(place.id)) m.addTo(markers);
       }
 
+      const syncLabels = () => {
+        const z = map.getZoom();
+        // Map basemap already includes street names — skip the overlay there.
+        const wantLabels = baseLayerIdRef.current !== "streets";
+        const place = placeLabelRef.current;
+        const street = streetLabelRef.current;
+        if (place) {
+          const on = wantLabels && z >= PLACE_LABEL_TILE.minZoom;
+          if (on && !map.hasLayer(place)) place.addTo(map);
+          if (!on && map.hasLayer(place)) map.removeLayer(place);
+        }
+        if (street) {
+          const on = wantLabels && z >= STREET_LABEL_TILE.minZoom;
+          if (on && !map.hasLayer(street)) street.addTo(map);
+          if (!on && map.hasLayer(street)) map.removeLayer(street);
+        }
+      };
+
       const syncChrome = () => {
         const z = map.getZoom();
         if (regions) {
           if (z < 13) regions.addTo(map);
           else map.removeLayer(regions);
         }
+        syncLabels();
         for (const place of placesRef.current) {
           const mk = markersRef.current.get(place.id);
           if (!mk) continue;
@@ -314,6 +435,9 @@ export function LakeMap({
       draftRef.current = null;
       baseLayerRef.current = null;
       histLayerRef.current = null;
+      geoLayerRef.current = null;
+      placeLabelRef.current = null;
+      streetLabelRef.current = null;
     };
   }, []);
 
@@ -374,6 +498,21 @@ export function LakeMap({
     window.setTimeout(() => {
       if (prev && prev !== next && map.hasLayer(prev)) map.removeLayer(prev);
     }, 1200);
+    // Toggle street/place label overlays when switching basemap (Map already has names).
+    const z = map.getZoom();
+    const wantLabels = layer !== "streets";
+    const place = placeLabelRef.current;
+    const street = streetLabelRef.current;
+    if (place) {
+      const on = wantLabels && z >= PLACE_LABEL_TILE.minZoom;
+      if (on && !map.hasLayer(place)) place.addTo(map);
+      if (!on && map.hasLayer(place)) map.removeLayer(place);
+    }
+    if (street) {
+      const on = wantLabels && z >= STREET_LABEL_TILE.minZoom;
+      if (on && !map.hasLayer(street)) street.addTo(map);
+      if (!on && map.hasLayer(street)) map.removeLayer(street);
+    }
   }, [layer, mapReady]);
 
   useEffect(() => {
@@ -387,6 +526,18 @@ export function LakeMap({
       map.removeLayer(hist);
     }
   }, [historical, histOpacity, mapReady]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const geo = geoLayerRef.current;
+    if (!map || !geo) return;
+    geo.setOpacity(geoOpacity);
+    if (geology) {
+      if (!map.hasLayer(geo)) geo.addTo(map);
+    } else if (map.hasLayer(geo)) {
+      map.removeLayer(geo);
+    }
+  }, [geology, geoOpacity, mapReady]);
 
   useEffect(() => {
     const group = markerGroupRef.current;
@@ -440,18 +591,19 @@ export function LakeMap({
     draftRef.current?.remove();
     draftRef.current = null;
     if (!draftPoint) return;
+    const placeKind = draftKindToPlaceKind(addKind);
     const m = L.marker([draftPoint.lat, draftPoint.lon], {
       icon: pinIcon(
         L,
-        `<div class="lf-marker lf-marker--cove lf-marker--community is-selected is-labeled">
+        `<div class="lf-marker lf-marker--${placeKind} lf-marker--community is-selected is-labeled">
             <span class="lf-pin"></span>
-            <span class="lf-name">New cove</span>
+            <span class="lf-name">${escapeHtml(draftLabel(addKind))}</span>
           </div>`,
       ),
       draggable: true,
       autoPan: true,
       zIndexOffset: 2000,
-      title: "Drag to adjust",
+      title: `Drag to adjust · ${KIND_LABEL[placeKind]}`,
     });
     m.on("dragend", () => {
       const ll = m.getLatLng();
@@ -459,7 +611,7 @@ export function LakeMap({
     });
     m.addTo(map);
     draftRef.current = m;
-  }, [draftPoint]);
+  }, [draftPoint, addKind]);
 
   return (
     <div

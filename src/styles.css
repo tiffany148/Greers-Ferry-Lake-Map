@@ -219,6 +219,55 @@
   transform: rotate(45deg) scale(1.28);
 }
 
+.lf-marker--depth .lf-pin {
+  background: #3d7ea6;
+  border-radius: 9999px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+}
+
+.lf-marker--temperature .lf-pin {
+  background: #c47a3a;
+  border-radius: 9999px;
+  width: 11px;
+  height: 11px;
+  margin-left: -5.5px;
+}
+
+.lf-marker--hazard .lf-pin {
+  background: #c45c4a;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+  border: none;
+  width: 14px;
+  height: 12px;
+  margin-left: -7px;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.5));
+}
+
+.lf-marker--hazard.is-selected .lf-pin {
+  transform: scale(1.28);
+}
+
+.lf-marker--pin .lf-pin {
+  background: #8a7bb8;
+  border-radius: 9999px 9999px 9999px 4px;
+  transform: rotate(-45deg);
+}
+
+.lf-marker--pin.is-selected .lf-pin {
+  transform: rotate(-45deg) scale(1.28);
+}
+
+.lf-geology-sheet {
+  mix-blend-mode: multiply;
+}
+
+/* Street / place name tiles sit above sat, topo, and historical overlays. */
+.lf-street-labels {
+  filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.85)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.55));
+}
+
 .lf-name {
   position: absolute;
   top: calc(100% + 2px);

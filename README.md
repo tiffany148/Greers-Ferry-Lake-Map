@@ -1,6 +1,6 @@
 # Greers Ferry Lake Map
 
-Interactive map of Greers Ferry Lake (Arkansas) — coves, islands, parks, and marinas, plus community-named coves and a **Before the dam** overlay of USGS topographic maps from 1963 and earlier.
+Interactive map of Greers Ferry Lake (Arkansas) — coves, islands, parks, and marinas, plus shared field pins (depth, temperature, hazards, custom marks), a **Geology** overlay, and a **Before the dam** overlay of USGS topographic maps from 1963 and earlier.
 
 ## Run it
 
@@ -34,8 +34,10 @@ Do not commit `node_modules` — run `npm install` after cloning.
 
 - Pins for islands, coves, Corps parks, marinas, towns, and landmarks
 - Search, region chips (Upper Lake, The Narrows, Lower Lake), and a distance ruler
-- **Name a cove** — shared names persist when a database is configured
-- **Before the dam** — georeferenced USGS historical topos (Little Red River valley before the reservoir)
+- **Add pin** — cove names, water depth, temperature, hazards, and custom pins (shared when a database is configured; in-memory locally)
+- **Before the dam** — georeferenced USGS historical topos (Little Red River valley before the reservoir), including Stark and the old roads / dismantled railway on clearer 1930+ reprints
+- Street / road labels appear when you zoom in and stay visible through overlays
+- **Geology** — Macrostrat / USGS bedrock overlay with fade control
 - Saved hearts stay in the browser (`localStorage`)
 
 ## Database (optional)

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  AlertTriangle,
   Anchor,
+  Droplets,
   Heart,
   History,
   Info,
@@ -11,6 +13,7 @@ import {
   Plus,
   Ruler,
   Search,
+  Thermometer,
   Trees,
   Waves,
   X,
@@ -22,18 +25,21 @@ import {
   PLACES,
   REGION_LABEL,
   communityCoveToPlace,
+  fieldPinToPlace,
   searchPlaces,
   type Place,
   type PlaceKind,
   type RegionId,
 } from "@/lib/places";
 import { addCommunityCove, listCommunityCoves } from "@/lib/community-coves";
+import { addFieldPin, listFieldPins, type FieldPinKind } from "@/lib/field-pins";
+import { GEOLOGY_DEFAULT_OPACITY } from "@/lib/geology-maps";
 import { HISTORICAL_DEFAULT_OPACITY } from "@/lib/historical-maps";
 import { cn } from "@/lib/utils";
 import { useFavorites } from "@/hooks/use-favorites";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { LakeMap, type MapLayerId } from "@/components/lake-map";
+import { LakeMap, type AddPinKind, type MapLayerId } from "@/components/lake-map";
 
 const KIND_ICON: Record<PlaceKind, typeof Waves> = {
   island: Mountain,
@@ -43,16 +49,33 @@ const KIND_ICON: Record<PlaceKind, typeof Waves> = {
   point: MapPin,
   town: MapPin,
   landmark: Info,
+  depth: Droplets,
+  temperature: Thermometer,
+  hazard: AlertTriangle,
+  pin: MapPin,
 };
 
-type KindFilter = "all" | "saved" | "community" | PlaceKind;
+const ADD_OPTIONS: {
+  kind: AddPinKind;
+  label: string;
+  hint: string;
+  Icon: typeof Waves;
+}[] = [
+  { kind: "cove", label: "Cove name", hint: "Local pocket name", Icon: Waves },
+  { kind: "depth", label: "Water depth", hint: "Sounding in feet", Icon: Droplets },
+  { kind: "temperature", label: "Temperature", hint: "Surface °F", Icon: Thermometer },
+  { kind: "hazard", label: "Hazard", hint: "Stump, rock, shoal…", Icon: AlertTriangle },
+  { kind: "pin", label: "Custom pin", hint: "Any shared mark", Icon: MapPin },
+];
+
+type KindFilter = "all" | "saved" | "community" | "field" | PlaceKind;
 type RegionFilter = "all" | RegionId;
 
 function coords(place: Place) {
   return `${place.lat.toFixed(5)}°N  ${Math.abs(place.lon).toFixed(5)}°W`;
 }
 
-export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] }) {
+export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
   const [query, setQuery] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
   const [region, setRegion] = useState<RegionFilter>("all");
@@ -60,6 +83,8 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
   const [layer, setLayer] = useState<MapLayerId>("satellite");
   const [historical, setHistorical] = useState(false);
   const [histOpacity, setHistOpacity] = useState(HISTORICAL_DEFAULT_OPACITY);
+  const [geology, setGeology] = useState(false);
+  const [geoOpacity, setGeoOpacity] = useState(GEOLOGY_DEFAULT_OPACITY);
   const [measure, setMeasure] = useState(false);
   const [measureLabel, setMeasureLabel] = useState<string | null>(null);
   const [flyRequest, setFlyRequest] = useState(0);
@@ -67,10 +92,13 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
   const [about, setAbout] = useState(false);
   const [mobileList, setMobileList] = useState(false);
   const [mounted, setMounted] = useState(false);
-  const [community, setCommunity] = useState<Place[]>(initialCommunity);
+  const [shared, setShared] = useState<Place[]>(initialShared);
+  const [addMenu, setAddMenu] = useState(false);
   const [addMode, setAddMode] = useState(false);
+  const [addKind, setAddKind] = useState<AddPinKind>("cove");
   const [draftPoint, setDraftPoint] = useState<{ lat: number; lon: number } | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [draftValue, setDraftValue] = useState("");
   const [draftNote, setDraftNote] = useState("");
   const [draftError, setDraftError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -78,36 +106,37 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
 
   useEffect(() => setMounted(true), []);
 
-  const refreshCommunity = useCallback(async () => {
+  const refreshShared = useCallback(async () => {
     try {
-      const rows = await listCommunityCoves();
-      setCommunity(rows.map(communityCoveToPlace));
+      const [coves, pins] = await Promise.all([listCommunityCoves(), listFieldPins()]);
+      setShared([...coves.map(communityCoveToPlace), ...pins.map(fieldPinToPlace)]);
     } catch {
       /* preview may still be migrating */
     }
   }, []);
 
   useEffect(() => {
-    void refreshCommunity();
+    void refreshShared();
     const tick = window.setInterval(() => {
-      if (document.visibilityState === "visible") void refreshCommunity();
+      if (document.visibilityState === "visible") void refreshShared();
     }, 30_000);
     const onVis = () => {
-      if (document.visibilityState === "visible") void refreshCommunity();
+      if (document.visibilityState === "visible") void refreshShared();
     };
     document.addEventListener("visibilitychange", onVis);
     return () => {
       window.clearInterval(tick);
       document.removeEventListener("visibilitychange", onVis);
     };
-  }, [refreshCommunity]);
+  }, [refreshShared]);
 
-  const catalog = useMemo(() => [...PLACES, ...community], [community]);
+  const catalog = useMemo(() => [...PLACES, ...shared], [shared]);
 
   const filtered = useMemo(() => {
     let list = searchPlaces(query, catalog);
     if (kind === "saved") list = list.filter((p) => favs.has(p.id));
     else if (kind === "community") list = list.filter((p) => p.community);
+    else if (kind === "field") list = list.filter((p) => p.field);
     else if (kind !== "all") list = list.filter((p) => p.kind === kind);
     if (region !== "all") list = list.filter((p) => p.region === region);
     return list;
@@ -122,33 +151,61 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
     if (id) setMobileList(false);
   }
 
-  function startAddCove() {
+  function startAdd(next: AddPinKind) {
     setMeasure(false);
     setSelectedId(null);
+    setAddMenu(false);
+    setAddKind(next);
     setAddMode(true);
     setDraftPoint(null);
     setDraftName("");
+    setDraftValue("");
     setDraftNote("");
     setDraftError(null);
     setMobileList(false);
   }
 
-  function cancelAddCove() {
+  function cancelAdd() {
     setAddMode(false);
+    setAddMenu(false);
     setDraftPoint(null);
     setDraftName("");
+    setDraftValue("");
     setDraftNote("");
     setDraftError(null);
   }
 
-  async function submitCove() {
+  async function submitAdd() {
     if (!draftPoint) return;
     setSaving(true);
     setDraftError(null);
     try {
-      const result = await addCommunityCove({
+      if (addKind === "cove") {
+        const result = await addCommunityCove({
+          data: {
+            name: draftName,
+            lat: draftPoint.lat,
+            lon: draftPoint.lon,
+            note: draftNote || undefined,
+          },
+        });
+        if (!result.ok) {
+          setDraftError(result.error);
+          return;
+        }
+        const place = communityCoveToPlace(result.cove);
+        setShared((prev) => [place, ...prev.filter((p) => p.id !== place.id)]);
+        cancelAdd();
+        setKind("all");
+        selectPlace(place.id, true);
+        return;
+      }
+
+      const result = await addFieldPin({
         data: {
-          name: draftName,
+          kind: addKind as FieldPinKind,
+          title: draftName || draftValue,
+          value: draftValue || undefined,
           lat: draftPoint.lat,
           lon: draftPoint.lon,
           note: draftNote || undefined,
@@ -158,13 +215,13 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
         setDraftError(result.error);
         return;
       }
-      const place = communityCoveToPlace(result.cove);
-      setCommunity((prev) => [place, ...prev.filter((p) => p.id !== place.id)]);
-      cancelAddCove();
-      setKind("all");
+      const place = fieldPinToPlace(result.pin);
+      setShared((prev) => [place, ...prev.filter((p) => p.id !== place.id)]);
+      cancelAdd();
+      setKind(addKind);
       selectPlace(place.id, true);
     } catch {
-      setDraftError("Could not save that cove. Try again.");
+      setDraftError("Could not save that pin. Try again.");
     } finally {
       setSaving(false);
     }
@@ -174,11 +231,14 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
     const c: Record<string, number> = {
       all: catalog.length,
       saved: favs.ids.length,
-      community: community.length,
+      community: shared.filter((p) => p.community).length,
+      field: shared.filter((p) => p.field).length,
     };
     for (const k of KIND_ORDER) c[k] = catalog.filter((p) => p.kind === k).length;
     return c;
-  }, [favs.ids.length, catalog, community.length]);
+  }, [favs.ids.length, catalog, shared]);
+
+  const addMeta = ADD_OPTIONS.find((o) => o.kind === addKind) ?? ADD_OPTIONS[0]!;
 
   return (
     <div className="relative h-dvh w-full overflow-hidden bg-bg text-fg">
@@ -194,6 +254,7 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
           flyRequest={flyRequest}
           fitRequest={fitRequest}
           addMode={addMode}
+          addKind={addKind}
           draftPoint={draftPoint}
           onPickPoint={(lat, lon) => {
             setDraftPoint({ lat, lon });
@@ -201,6 +262,8 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
           }}
           historical={historical}
           histOpacity={histOpacity}
+          geology={geology}
+          geoOpacity={geoOpacity}
         />
       ) : (
         <div className="absolute inset-0 z-0 bg-bg" />
@@ -268,38 +331,92 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
             </label>
           ) : null}
           <Button
+            variant={geology ? "primary" : "outline"}
+            size="sm"
+            aria-pressed={geology}
+            aria-label={geology ? "Hide geology overlay" : "Show geology overlay"}
+            onClick={() => setGeology((v) => !v)}
+          >
+            <Mountain className="size-4" />
+            <span className="hidden sm:inline">Geology</span>
+          </Button>
+          {geology ? (
+            <label className="flex w-40 items-center gap-2 rounded-sm bg-surface px-3 py-2 shadow-panel">
+              <span className="text-xs font-medium tracking-wide text-muted uppercase">Fade</span>
+              <input
+                type="range"
+                min={0.15}
+                max={0.85}
+                step={0.02}
+                value={geoOpacity}
+                onChange={(e) => setGeoOpacity(Number(e.target.value))}
+                className="lf-range min-w-0 flex-1"
+                aria-label="Geology overlay strength"
+              />
+            </label>
+          ) : null}
+          <Button
             variant={measure ? "primary" : "outline"}
             size="sm"
             aria-pressed={measure}
             onClick={() => {
-              cancelAddCove();
+              cancelAdd();
               setMeasure((v) => !v);
             }}
           >
             <Ruler className="size-4" />
             <span className="hidden sm:inline">{measure ? "Measuring" : "Measure"}</span>
           </Button>
-          <Button
-            variant={addMode ? "primary" : "outline"}
-            size="sm"
-            aria-pressed={addMode}
-            aria-label={addMode ? "Cancel naming" : "Name a cove"}
-            onClick={() => {
-              if (addMode) cancelAddCove();
-              else startAddCove();
-            }}
-          >
-            <Plus className="size-4" />
-            <span className="hidden sm:inline">{addMode ? "Naming" : "Name a cove"}</span>
-          </Button>
+          <div className="relative">
+            <Button
+              variant={addMode || addMenu ? "primary" : "outline"}
+              size="sm"
+              aria-pressed={addMode || addMenu}
+              aria-expanded={addMenu}
+              aria-label={addMode ? "Cancel adding" : "Add a pin"}
+              onClick={() => {
+                if (addMode) cancelAdd();
+                else setAddMenu((v) => !v);
+              }}
+            >
+              <Plus className="size-4" />
+              <span className="hidden sm:inline">
+                {addMode ? `Adding ${addMeta.label.toLowerCase()}` : "Add pin"}
+              </span>
+            </Button>
+            {addMenu ? (
+              <div className="absolute top-full right-0 z-40 mt-2 w-56 overflow-hidden rounded-md bg-surface shadow-panel">
+                <p className="border-b border-border px-3 py-2 text-[11px] font-medium tracking-[0.12em] text-muted uppercase">
+                  Drop on the map
+                </p>
+                <ul>
+                  {ADD_OPTIONS.map(({ kind: k, label, hint, Icon }) => (
+                    <li key={k}>
+                      <button
+                        type="button"
+                        onClick={() => startAdd(k)}
+                        className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-elevated"
+                      >
+                        <Icon className="mt-0.5 size-4 shrink-0 text-accent" />
+                        <span>
+                          <span className="block text-sm font-medium">{label}</span>
+                          <span className="block text-xs text-muted">{hint}</span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
           {measure && measureLabel ? (
             <p className="rounded-sm bg-surface px-3 py-1.5 font-mono text-xs tabular-nums text-accent shadow-panel">
               {measureLabel}
             </p>
           ) : null}
           {addMode && !draftPoint ? (
-            <p className="max-w-[10rem] rounded-sm bg-surface px-3 py-1.5 text-xs text-fg shadow-panel">
-              Tap the cove on the map
+            <p className="max-w-[11rem] rounded-sm bg-surface px-3 py-1.5 text-xs text-fg shadow-panel">
+              Tap the map to place {addMeta.label.toLowerCase()}
             </p>
           ) : null}
         </div>
@@ -320,7 +437,11 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
               className="flex-1 text-left text-sm font-medium"
               onClick={() => setMobileList((v) => !v)}
             >
-              {selected ? selected.name : addMode && draftPoint ? "Name this cove" : `${filtered.length} places`}
+              {selected
+                ? selected.name
+                : addMode && draftPoint
+                  ? `Add ${addMeta.label.toLowerCase()}`
+                  : `${filtered.length} places`}
             </button>
             <Button
               variant="quiet"
@@ -345,7 +466,7 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
                 <Input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search coves, islands, parks…"
+                  placeholder="Search coves, depths, hazards…"
                   className="pl-9"
                   aria-label="Search places"
                 />
@@ -356,7 +477,12 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
                     ["all", "All"],
                     ["island", "Islands"],
                     ["cove", "Coves"],
+                    ["depth", "Depth"],
+                    ["temperature", "Temp"],
+                    ["hazard", "Hazards"],
+                    ["pin", "Pins"],
                     ["community", "Local"],
+                    ["field", "Field"],
                     ["park", "Parks"],
                     ["marina", "Marinas"],
                     ["saved", "Saved"],
@@ -405,16 +531,19 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
             </div>
 
             {addMode ? (
-              <AddCoveForm
+              <AddPinForm
+                addKind={addKind}
                 draftPoint={draftPoint}
                 name={draftName}
+                value={draftValue}
                 note={draftNote}
                 error={draftError}
                 saving={saving}
                 onName={setDraftName}
+                onValue={setDraftValue}
                 onNote={setDraftNote}
-                onCancel={cancelAddCove}
-                onSubmit={() => void submitCove()}
+                onCancel={cancelAdd}
+                onSubmit={() => void submitAdd()}
               />
             ) : null}
 
@@ -434,6 +563,7 @@ export function LakeApp({ initialCommunity = [] }: { initialCommunity?: Place[] 
               onPick={(id) => selectPlace(id, true)}
               emptySaved={kind === "saved"}
               emptyLocal={kind === "community"}
+              emptyField={kind === "field" || kind === "depth" || kind === "temperature" || kind === "hazard" || kind === "pin"}
             />
           </div>
         </div>
@@ -451,6 +581,7 @@ function PlaceList({
   onPick,
   emptySaved,
   emptyLocal,
+  emptyField,
 }: {
   places: Place[];
   selectedId: string | null;
@@ -458,6 +589,7 @@ function PlaceList({
   onPick: (id: string) => void;
   emptySaved: boolean;
   emptyLocal?: boolean;
+  emptyField?: boolean;
 }) {
   const grouped = KIND_ORDER.map((k) => ({
     kind: k,
@@ -470,8 +602,10 @@ function PlaceList({
         {emptySaved
           ? "Save islands and coves from a place card to build a short list."
           : emptyLocal
-            ? "No local names yet. Tap Name a cove, then drop a pin on the pocket you know."
-            : "No places match that search."}
+            ? "No local cove names yet. Tap Add pin → Cove name."
+            : emptyField
+              ? "No field pins yet. Tap Add pin to drop depth, temp, hazards, or custom marks."
+              : "No places match that search."}
       </p>
     );
   }
@@ -508,7 +642,8 @@ function PlaceList({
                       </span>
                       <span className="block text-xs text-muted">
                         {REGION_LABEL[p.region]}
-                        {p.community ? " · local" : p.approx ? " · approx." : ""}
+                        {p.fieldValue ? ` · ${p.fieldValue}` : ""}
+                        {p.community ? " · local" : p.field ? " · field" : p.approx ? " · approx." : ""}
                       </span>
                     </span>
                   </button>
@@ -541,7 +676,7 @@ function PlaceDetail({
           <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.12em] text-accent uppercase">
             <Icon className="size-3.5" />
             {KIND_LABEL[place.kind]} · {REGION_LABEL[place.region]}
-            {place.community ? " · Local" : ""}
+            {place.community ? " · Local" : place.field ? " · Field" : ""}
           </p>
           <h2 className="mt-1 font-display text-xl leading-snug font-medium italic">{place.name}</h2>
         </div>
@@ -592,27 +727,41 @@ function PlaceDetail({
   );
 }
 
-function AddCoveForm({
+function AddPinForm({
+  addKind,
   draftPoint,
   name,
+  value,
   note,
   error,
   saving,
   onName,
+  onValue,
   onNote,
   onCancel,
   onSubmit,
 }: {
+  addKind: AddPinKind;
   draftPoint: { lat: number; lon: number } | null;
   name: string;
+  value: string;
   note: string;
   error: string | null;
   saving: boolean;
   onName: (v: string) => void;
+  onValue: (v: string) => void;
   onNote: (v: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
 }) {
+  const meta = ADD_OPTIONS.find((o) => o.kind === addKind) ?? ADD_OPTIONS[0]!;
+  const needsValue = addKind === "depth" || addKind === "temperature";
+  const canSubmit =
+    !!draftPoint &&
+    (needsValue
+      ? value.trim().length > 0
+      : name.trim().length >= 2);
+
   return (
     <form
       className="space-y-3 border-b border-border px-3 py-3"
@@ -623,16 +772,24 @@ function AddCoveForm({
     >
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs font-medium tracking-[0.12em] text-accent uppercase">Local name</p>
+          <p className="text-xs font-medium tracking-[0.12em] text-accent uppercase">{meta.label}</p>
           <p className="mt-1 text-sm text-muted">
             {draftPoint
-              ? "Name the pocket you dropped. It shows up on every device."
-              : "Tap the map on the cove — then name it."}
+              ? addKind === "cove"
+                ? "Name the pocket you dropped. It shows up on every device."
+                : addKind === "depth"
+                  ? "Enter the sounding in feet. Optional label and note."
+                  : addKind === "temperature"
+                    ? "Enter surface water temp in °F. Optional label and note."
+                    : addKind === "hazard"
+                      ? "Name the hazard so others can steer clear."
+                      : "Name this shared pin."
+              : `Tap the map — then fill in ${meta.label.toLowerCase()}.`}
           </p>
         </div>
         <button
           type="button"
-          aria-label="Cancel naming"
+          aria-label="Cancel adding"
           onClick={onCancel}
           className="flex size-9 shrink-0 items-center justify-center rounded-sm text-muted hover:bg-elevated hover:text-fg"
         >
@@ -641,15 +798,39 @@ function AddCoveForm({
       </div>
       {draftPoint ? (
         <>
+          {needsValue ? (
+            <label className="block">
+              <span className="sr-only">{addKind === "depth" ? "Depth in feet" : "Temperature °F"}</span>
+              <Input
+                value={value}
+                onChange={(e) => onValue(e.target.value)}
+                placeholder={addKind === "depth" ? "Depth — e.g. 42 ft" : "Temp — e.g. 78°F"}
+                maxLength={24}
+                autoFocus
+                required
+                inputMode="decimal"
+              />
+            </label>
+          ) : null}
           <label className="block">
-            <span className="sr-only">Cove name</span>
+            <span className="sr-only">
+              {addKind === "cove" ? "Cove name" : addKind === "hazard" ? "Hazard name" : "Title"}
+            </span>
             <Input
               value={name}
               onChange={(e) => onName(e.target.value)}
-              placeholder="Cove name"
+              placeholder={
+                addKind === "cove"
+                  ? "Cove name"
+                  : addKind === "hazard"
+                    ? "Hazard — e.g. Stump field"
+                    : addKind === "pin"
+                      ? "Pin name"
+                      : "Optional label"
+              }
               maxLength={48}
-              autoFocus
-              required
+              autoFocus={!needsValue}
+              required={!needsValue}
             />
           </label>
           <label className="block">
@@ -657,7 +838,13 @@ function AddCoveForm({
             <Input
               value={note}
               onChange={(e) => onNote(e.target.value)}
-              placeholder="Optional — ski pocket, walleye hole…"
+              placeholder={
+                addKind === "cove"
+                  ? "Optional — ski pocket, walleye hole…"
+                  : addKind === "hazard"
+                    ? "Optional — when visible, how bad…"
+                    : "Optional note"
+              }
               maxLength={160}
             />
           </label>
@@ -665,7 +852,7 @@ function AddCoveForm({
             {draftPoint.lat.toFixed(5)}°N  {Math.abs(draftPoint.lon).toFixed(5)}°W
           </p>
           {error ? <p className="text-sm text-danger">{error}</p> : null}
-          <Button type="submit" size="sm" disabled={saving || name.trim().length < 2}>
+          <Button type="submit" size="sm" disabled={saving || !canSubmit}>
             {saving ? "Saving…" : "Add to the lake"}
           </Button>
         </>
@@ -749,11 +936,12 @@ function AboutCard({ onClose }: { onClose: () => void }) {
           </div>
         </dl>
         <p className="mt-4 text-xs leading-relaxed text-muted">
-          Place names follow USGS GNIS, the Corps lake map, and the local visitor guide. Pins marked
-          approximate are locally used names without a surveyed point. Anyone can add a cove name —
-          those local pins are shared across every device. Saved hearts stay on this device. Turn on
-          Before the dam to overlay USGS topographic maps from 1963 and earlier — the Little Red
-          River valley, georeferenced to this map, as it looked before the reservoir filled.
+          Place names follow USGS GNIS, the Corps lake map, and the local visitor guide. Anyone can
+          add a cove name, water depth, temperature, hazard, or custom pin — those shared marks show
+          on every device. Saved hearts stay on this device. Overlays: Before the dam (USGS topo
+          sheets ≤1963, including Stark and the old roads/railway on Mountain View reprints) and
+          Geology (Macrostrat / USGS bedrock). Zoom in for street labels on sat, topo, and Map —
+          they stay above overlays.
         </p>
       </div>
     </div>
