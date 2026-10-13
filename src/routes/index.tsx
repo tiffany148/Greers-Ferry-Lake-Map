@@ -1,13 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LakeApp } from "@/components/lake-app";
 import { listCommunityCoves } from "@/lib/community-coves";
-import { communityCoveToPlace } from "@/lib/places";
+import { listFieldPins } from "@/lib/field-pins";
+import { communityCoveToPlace, fieldPinToPlace, type Place } from "@/lib/places";
 
 export const Route = createFileRoute("/")({
-  loader: async () => {
+  loader: async (): Promise<Place[]> => {
     try {
-      const rows = await listCommunityCoves();
-      return rows.map(communityCoveToPlace);
+      const [coves, pins] = await Promise.all([listCommunityCoves(), listFieldPins()]);
+      return [...coves.map(communityCoveToPlace), ...pins.map(fieldPinToPlace)];
     } catch {
       return [];
     }
@@ -16,6 +17,6 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
-  const initialCommunity = Route.useLoaderData();
-  return <LakeApp initialCommunity={initialCommunity} />;
+  const initialShared = Route.useLoaderData();
+  return <LakeApp initialShared={initialShared} />;
 }
