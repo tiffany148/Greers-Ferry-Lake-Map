@@ -936,12 +936,12 @@ function AboutCard({ onClose }: { onClose: () => void }) {
           </div>
         </dl>
         <p className="mt-4 text-xs leading-relaxed text-muted">
-          Place names follow USGS GNIS, the Corps lake map, and the local visitor guide. Anyone can
-          add a cove name, water depth, temperature, hazard, or custom pin — those shared marks show
-          on every device. Saved hearts stay on this device. Overlays: Before the dam (USGS topo
-          sheets ≤1963, including Stark and the old roads/railway on Mountain View reprints) and
-          Geology (Macrostrat / USGS bedrock). Zoom in for street labels on sat, topo, and Map —
-          they stay above overlays.
+          Place names follow USGS GNIS, the Corps lake map, the local visitor guide, and the Greers
+          Ferry Lake cove names map. Anyone can add a cove name, water depth, temperature, hazard, or
+          custom pin — those shared marks show on every device. Saved hearts stay on this device.
+          Overlays stack: turn on Before the dam (USGS topo ≤1963, including Stark and the old
+          roads/railway) and Geology (Macrostrat / USGS bedrock) together. Zoom in for street labels
+          on sat, topo, and Map — they stay above overlays.
         </p>
       </div>
     </div>
