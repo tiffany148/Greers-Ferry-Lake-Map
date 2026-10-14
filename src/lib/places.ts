@@ -24,6 +24,10 @@ export type Place = {
   description: string;
   amenities?: string[];
   access?: string;
+  /** Street / mailing address when known (marinas, parks). */
+  address?: string;
+  /** Public phone when known. */
+  phone?: string;
   approx?: boolean;
   importance: 1 | 2 | 3;
   community?: boolean;
@@ -461,6 +465,7 @@ export const PLACES: Place[] = [
       "The largest Corps park on the lake, at the dam in Heber Springs. Year-round camping, a marina, swim beach, and the William Carl Garner Visitor Center nearby. Dedicated with the dam by President Kennedy in 1963.",
     amenities: ["211 campsites", "Marina", "Swim beach", "Playground", "Dump station"],
     access: "Hwy 25 north of Heber Springs, follow signs",
+    address: "315 Heber Springs Rd N, Heber Springs, AR 72543",
     importance: 3,
   },
   {
@@ -475,6 +480,7 @@ export const PLACES: Place[] = [
       "Seasonal Corps park on the south shore west of town. Full facilities, a marina, and a short run to Eden Isle, Goat Island, and Sandy Beach.",
     amenities: ["114 campsites", "Marina", "Swim beach", "Playground"],
     access: "Hwy 110 west of Heber Springs, then Park Road",
+    address: "89 Park Rd, Heber Springs, AR 72543",
     importance: 3,
   },
   {
@@ -489,6 +495,7 @@ export const PLACES: Place[] = [
       "Year-round Corps park just below the dam on Hatchery Road. Named for the president who dedicated the project. Next door to the National Fish Hatchery and the Little Red River trout tailwater.",
     amenities: ["68 campsites", "Boat ramp", "Playground", "Tailwater access"],
     access: "Cross the dam, second right onto Hatchery Road",
+    address: "375 Hatchery Rd, Heber Springs, AR 72543",
     importance: 2,
   },
   {
@@ -503,6 +510,7 @@ export const PLACES: Place[] = [
       "A large seasonal Corps park on the north shore toward Tumbling Shoals. Group camping, a swim beach, and a straight shot across the Big Water to the dam and Eden Isle.",
     amenities: ["116 campsites", "Group camp", "Swim beach", "Boat ramp"],
     access: "Hwy 25 north of Heber Springs to Hwy 25S",
+    address: "Old Hwy 25 / Tumbling Shoals, Heber Springs, AR",
     importance: 2,
   },
   {
@@ -517,6 +525,7 @@ export const PLACES: Place[] = [
       "A smaller seasonal campground on the northeast shore, looking down on Scout Island. Vault toilets, a ramp, and a quieter alternative to Dam Site.",
     amenities: ["30 campsites", "Boat ramp", "Dump station"],
     access: "From Drasco, Hwy 92 west then Brownsville Road",
+    address: "475 Cherokee Park Rd, Heber Springs, AR",
     importance: 2,
   },
   {
@@ -559,6 +568,7 @@ export const PLACES: Place[] = [
       "The Corps park on the gorge that joins the two lakes. Marina, camping, and the tightest, most scenic run on Greers Ferry — watch for no-wake and traffic in the cut.",
     amenities: ["58 campsites", "Marina", "Boat ramp"],
     access: "Hwy 16 southwest of Greers Ferry, follow signs",
+    address: "7699 Edgemont Rd, Higden, AR 72067",
     importance: 3,
   },
   {
@@ -573,6 +583,7 @@ export const PLACES: Place[] = [
       "Year-round park on the Devil’s Fork arm north of Greers Ferry. Multiple ramps and swim areas; Edgemont Bridge is just up the fork.",
     amenities: ["55 campsites", "Boat ramps", "Swim areas", "Playground"],
     access: "Hwy 16 in Greers Ferry, follow Devil’s Fork Road",
+    address: "73 Devils Fork Rd, Greers Ferry, AR 72067",
     importance: 2,
   },
   {
@@ -587,6 +598,7 @@ export const PLACES: Place[] = [
       "Seasonal park and marina on the Hill Creek arm near Edgemont. One of the prettiest north-shore camps, with a swim beach and two ramps.",
     amenities: ["26 campsites", "Marina", "Swim beach", "Boat ramps"],
     access: "Drasco to Hwy 92 west, Hwy 225, then Hill Creek Road",
+    address: "474 Hill Creek Rd, Edgemont, AR 72044",
     importance: 2,
   },
   {
@@ -615,6 +627,7 @@ export const PLACES: Place[] = [
       "South-shore park looking across to Sugar Loaf Mountain Island. Campground, swim area, marina, and the usual boat-out point for the island trail.",
     amenities: ["Campground", "Marina", "Swim beach", "Boat ramp"],
     access: "Bee Branch via Hwy 92 to Hwy 337 west",
+    address: "1389 Resort Rd, Higden, AR 72067",
     importance: 3,
   },
   {
@@ -629,6 +642,7 @@ export const PLACES: Place[] = [
       "The west-end full-service park near Clinton. Year-round camping, a marina, swim beach, and playground — the home ramp for the Choctaw Creek arm.",
     amenities: ["106 campsites", "Marina", "Swim beach", "Playground"],
     access: "Clinton: US 65 to Hwy 330 east",
+    address: "3848 Hwy 330 E, Clinton, AR 72031",
     importance: 3,
   },
   {
@@ -682,51 +696,61 @@ export const PLACES: Place[] = [
     lat: 35.505912,
     lon: -92.095706,
     region: "lower",
+    aliases: ["Yacht Harbor"],
     description:
-      "Full-service marina on the Eden Isle peninsula. Goat and Scout Islands sit just to the north. Fuel, slips, and a short run into the heart of the Big Water.",
-    amenities: ["Fuel", "Slips", "Boat services"],
+      "Full-service marina on the Eden Isle peninsula, developed with the 1960s Eden Isle resort community after the lake filled. Goat and Scout Islands sit just to the north — fuel, slips, and a short run into the Big Water.",
+    amenities: ["Fuel", "Slips", "Boat services", "Ship store"],
     access: "Yacht Harbor Road, Eden Isle",
+    address: "10 Yacht Harbor Rd, Heber Springs, AR 72543",
+    phone: "501-362-2232",
     importance: 3,
   },
   {
     id: "dam-site-marina",
     name: "Dam Site Marina",
     kind: "marina",
-    lat: 35.5212,
-    lon: -92.0078,
+    lat: 35.5295,
+    lon: -92.0076,
     region: "lower",
+    aliases: ["Damsite Marina"],
     description:
-      "Marina inside Dam Site Recreation Area, minutes from the dam face, visitor center, and the cliffs above the tailwater.",
+      "Marina inside Dam Site Recreation Area, minutes from the dam face, William Carl Garner Visitor Center, and the cliffs above the Little Red tailwater. The Corps park was dedicated with the dam by President Kennedy in 1963.",
     amenities: ["Fuel", "Slips", "Ramp"],
     access: "Dam Site Rec, Heber Springs",
-    approx: true,
+    address: "Dam Site Recreation Area, Heber Springs, AR",
+    phone: "501-362-2333",
     importance: 2,
   },
   {
     id: "heber-springs-marina",
     name: "Heber Springs Marina",
     kind: "marina",
-    lat: 35.5024,
-    lon: -92.0742,
+    lat: 35.50202,
+    lon: -92.05932,
     region: "lower",
+    aliases: ["Heber Rec Marina", "Heber Springs Marina/Heber Rec."],
     description:
-      "The in-town marina at Heber Springs Recreation Area. Closest fuel to Sandy Beach and a quick hop to Eden Isle.",
+      "The in-town marina at Heber Springs Recreation Area on Park Road. Closest fuel to Sandy Beach and a quick hop west to Eden Isle — the classic south-shore hub since the reservoir opened.",
     amenities: ["Fuel", "Slips", "Ramp"],
     access: "Heber Springs Rec, Park Road",
-    approx: true,
+    address: "99 Park Rd, Heber Springs, AR 72543",
+    phone: "501-362-8838",
     importance: 2,
   },
   {
     id: "narrows-marina",
-    name: "Narrows Marina",
+    name: "Lacey's Narrows Marina",
     kind: "marina",
     lat: 35.560355,
     lon: -92.195708,
     region: "narrows",
+    aliases: ["Narrows Marina", "Laceys Narrows Marina"],
     description:
-      "Marina in the gorge between the two lakes. The staging point for running the Narrows — stay right of traffic and watch the no-wake zones.",
-    amenities: ["Slips", "Ramp"],
-    access: "Narrows Recreation Area",
+      "Marina in the gorge between the upper and lower lakes at Narrows Park. Staging point for running the Narrows — stay aware of traffic and no-wake zones in the cut that joins the two pools.",
+    amenities: ["Slips", "Ramp", "Camp nearby"],
+    access: "Narrows Recreation Area, Edgemont Rd",
+    address: "7674 Edgemont Rd, Higden, AR 72067",
+    phone: "501-825-6214",
     importance: 2,
   },
   {
@@ -737,9 +761,10 @@ export const PLACES: Place[] = [
     lon: -92.146263,
     region: "lower",
     description:
-      "Marina at Shiloh Rec, the first fuel and slips after you drop out of the Narrows into the lower lake.",
-    amenities: ["Slips", "Ramp"],
+      "Marina at Shiloh Recreation Area, the first fuel and slips after you drop out of the Narrows into the lower lake. The historic community of Shiloh sat near here before the reservoir filled in the early 1960s.",
+    amenities: ["Slips", "Fuel", "Ramp", "Rentals"],
     access: "Shiloh Recreation Area",
+    address: "Shiloh Recreation Area, Greers Ferry / Heber Springs, AR",
     importance: 2,
   },
   {
@@ -750,9 +775,10 @@ export const PLACES: Place[] = [
     lon: -92.148485,
     region: "upper",
     description:
-      "North-shore marina at the back of Hill Creek Cove near Edgemont. A quiet upper-lake harbor with camping next door.",
+      "North-shore marina at the back of Hill Creek Cove near Edgemont. A quiet upper-lake harbor with Corps camping next door and a short run to Devil’s Fork.",
     amenities: ["Slips", "Ramp"],
     access: "Hill Creek Recreation Area",
+    address: "Hill Creek Rd, Edgemont, AR 72044",
     importance: 2,
   },
   {
@@ -763,22 +789,27 @@ export const PLACES: Place[] = [
     lon: -92.298211,
     region: "upper",
     description:
-      "Full-service marina on Hwy 330, on the south-west shore of the upper lake. Fuel, rentals, slips, and the seasonal shuttle toward Sugar Loaf Mountain Island.",
+      "Full-service marina on Hwy 330 on the south-west shore of the upper lake. Fuel, rentals, slips, and the seasonal shuttle toward Sugar Loaf Mountain Island — the resort town’s main waterfront since Fairfield Bay developed in the 1960s–70s.",
     amenities: ["Fuel", "Slips", "Rentals", "Island shuttle (seasonal)"],
-    access: "4350 Hwy 330 S, Fairfield Bay / Shirley",
+    access: "Hwy 330 S, Fairfield Bay / Shirley",
+    address: "4350 AR-330 S, Fairfield Bay, AR 72088",
+    phone: "501-884-6030",
     importance: 3,
   },
   {
     id: "choctaw-marina",
-    name: "Choctaw Marina",
+    name: "Choctaw / Furgerson's Marina",
     kind: "marina",
     lat: 35.5327,
     lon: -92.3792,
     region: "upper",
+    aliases: ["Choctaw Marina", "Furgerson's Marina", "Furgersons Marina"],
     description:
-      "West-end marina next to Choctaw Recreation Area, off Hwy 330 east of Clinton. The last (or first) fuel on the Choctaw Creek arm.",
+      "West-end marina next to Choctaw Recreation Area off Hwy 330 east of Clinton. Long known locally as Furgerson’s — the last (or first) fuel on the Choctaw Creek arm.",
     amenities: ["Fuel", "Slips", "Ramp"],
-    access: "Choctaw Recreation Area, 3850 Hwy 330 E",
+    access: "Choctaw Recreation Area, Hwy 330 E",
+    address: "3848–3850 Hwy 330 E, Clinton, AR 72031",
+    phone: "501-745-2666",
     importance: 2,
   },
   {
@@ -789,9 +820,10 @@ export const PLACES: Place[] = [
     lon: -92.2708,
     region: "upper",
     description:
-      "South-shore marina at Sugar Loaf Park, looking straight at the island trail. A practical put-in if you are boating yourself to the mountain.",
+      "South-shore marina at Sugar Loaf Park looking straight at Sugar Loaf Mountain Island. A practical put-in if you are boating yourself to the National Recreation Trail on the island.",
     amenities: ["Slips", "Ramp"],
     access: "Sugar Loaf Recreation Area, Hwy 337",
+    address: "1389 Resort Rd / Sugar Loaf Rec Area, Higden, AR",
     importance: 2,
   },
 

@@ -27,6 +27,18 @@ const AddInput = z.object({
   note: z.string().optional(),
 });
 
+const UpdateInput = z.object({
+  id: z.number().int().positive(),
+  kind: z.enum(FIELD_PIN_KINDS),
+  title: z.string(),
+  value: z.string().optional(),
+  note: z.string().optional(),
+});
+
+const IdInput = z.object({
+  id: z.number().int().positive(),
+});
+
 function cleanText(raw: string) {
   return raw.replace(/\s+/g, " ").replace(/[\u0000-\u001f]/g, "").trim();
 }
@@ -58,6 +70,57 @@ function parseTempF(raw: string): string | null {
   return `${rounded}°F`;
 }
 
+function normalizePinFields(data: {
+  kind: FieldPinKind;
+  title: string;
+  value?: string;
+  note?: string;
+}): { ok: true; title: string; value: string | null; note: string | null } | { ok: false; error: string } {
+  const noteRaw = data.note ? cleanText(data.note) : "";
+  const note = noteRaw.length > 0 ? noteRaw : null;
+  let title = cleanText(data.title);
+  let valueText = data.value ? cleanText(data.value) : "";
+  let value: string | null = valueText || null;
+
+  if (note && note.length > 160) {
+    return { ok: false, error: "Keep the note under 160 characters." };
+  }
+  if (
+    looksLikeSpam(title) ||
+    (note && looksLikeSpam(note)) ||
+    (valueText && looksLikeSpam(valueText))
+  ) {
+    return { ok: false, error: "Leave links and addresses off the pin." };
+  }
+
+  if (data.kind === "depth") {
+    const parsed = parseDepthFeet(valueText || title);
+    if (!parsed) {
+      return { ok: false, error: "Enter a depth between 1 and 250 ft." };
+    }
+    value = parsed;
+    title = title.length >= 2 ? title : parsed;
+  } else if (data.kind === "temperature") {
+    const parsed = parseTempF(valueText || title);
+    if (!parsed) {
+      return { ok: false, error: "Enter a water temperature between 32 and 110°F." };
+    }
+    value = parsed;
+    title = title.length >= 2 ? title : parsed;
+  } else if (data.kind === "hazard") {
+    if (title.length < 2 || title.length > 48) {
+      return { ok: false, error: "Describe the hazard in 2–48 characters." };
+    }
+  } else if (title.length < 2 || title.length > 48) {
+    return { ok: false, error: "Use a pin name between 2 and 48 characters." };
+  }
+
+  if (title.length < 2 || title.length > 48) {
+    return { ok: false, error: "Use a title between 2 and 48 characters." };
+  }
+  return { ok: true, title, value, note };
+}
+
 export const listFieldPins = createServerFn({ method: "GET" }).handler(
   async (): Promise<FieldPinRow[]> => {
     const sql = await getSql();
@@ -75,52 +138,11 @@ export const addFieldPin = createServerFn({ method: "POST" })
     async ({
       data,
     }): Promise<{ ok: true; pin: FieldPinRow } | { ok: false; error: string }> => {
-      const kind = data.kind;
-      const noteRaw = data.note ? cleanText(data.note) : "";
-      const note = noteRaw.length > 0 ? noteRaw : null;
-      let title = cleanText(data.title);
-      let valueText = data.value ? cleanText(data.value) : "";
-      let value: string | null = valueText || null;
-
       if (!inLake(data.lat, data.lon)) {
         return { ok: false, error: "Drop the pin on Greers Ferry Lake." };
       }
-      if (note && note.length > 160) {
-        return { ok: false, error: "Keep the note under 160 characters." };
-      }
-      if (
-        looksLikeSpam(title) ||
-        (note && looksLikeSpam(note)) ||
-        (valueText && looksLikeSpam(valueText))
-      ) {
-        return { ok: false, error: "Leave links and addresses off the pin." };
-      }
-
-      if (kind === "depth") {
-        const parsed = parseDepthFeet(valueText || title);
-        if (!parsed) {
-          return { ok: false, error: "Enter a depth between 1 and 250 ft." };
-        }
-        value = parsed;
-        title = title.length >= 2 ? title : parsed;
-      } else if (kind === "temperature") {
-        const parsed = parseTempF(valueText || title);
-        if (!parsed) {
-          return { ok: false, error: "Enter a water temperature between 32 and 110°F." };
-        }
-        value = parsed;
-        title = title.length >= 2 ? title : parsed;
-      } else if (kind === "hazard") {
-        if (title.length < 2 || title.length > 48) {
-          return { ok: false, error: "Describe the hazard in 2–48 characters." };
-        }
-      } else if (title.length < 2 || title.length > 48) {
-        return { ok: false, error: "Use a pin name between 2 and 48 characters." };
-      }
-
-      if (title.length < 2 || title.length > 48) {
-        return { ok: false, error: "Use a title between 2 and 48 characters." };
-      }
+      const normalized = normalizePinFields(data);
+      if (!normalized.ok) return normalized;
 
       const sql = await getSql();
       const [countRow] = await sql<{ n: number }>`
@@ -132,10 +154,47 @@ export const addFieldPin = createServerFn({ method: "POST" })
 
       const [pin] = await sql<FieldPinRow>`
         insert into field_pins (kind, title, value, lat, lon, note)
-        values (${kind}, ${title}, ${value}, ${data.lat}, ${data.lon}, ${note})
+        values (${data.kind}, ${normalized.title}, ${normalized.value}, ${data.lat}, ${data.lon}, ${normalized.note})
         returning id, kind, title, value, lat, lon, note
       `;
       if (!pin) return { ok: false, error: "Could not save that pin. Try again." };
       return { ok: true, pin };
+    },
+  );
+
+export const updateFieldPin = createServerFn({ method: "POST" })
+  .validator((data: unknown) => UpdateInput.parse(data))
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: true; pin: FieldPinRow } | { ok: false; error: string }> => {
+      const normalized = normalizePinFields(data);
+      if (!normalized.ok) return normalized;
+
+      const sql = await getSql();
+      const [pin] = await sql<FieldPinRow>`
+        update field_pins
+        set kind = ${data.kind},
+            title = ${normalized.title},
+            value = ${normalized.value},
+            note = ${normalized.note}
+        where id = ${data.id}
+        returning id, kind, title, value, lat, lon, note
+      `;
+      if (!pin) return { ok: false, error: "That pin is gone — refresh and try again." };
+      return { ok: true, pin };
+    },
+  );
+
+export const deleteFieldPin = createServerFn({ method: "POST" })
+  .validator((data: unknown) => IdInput.parse(data))
+  .handler(
+    async ({ data }): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const sql = await getSql();
+      const rows = await sql<{ id: number }>`
+        delete from field_pins where id = ${data.id} returning id
+      `;
+      if (!rows[0]) return { ok: false, error: "That pin is already gone." };
+      return { ok: true };
     },
   );
