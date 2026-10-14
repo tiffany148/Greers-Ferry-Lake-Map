@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap, Marker, Polyline, TileLayer } from "leaflet";
+import { geologyPopupHtml, identifyGeologyAt } from "@/lib/geology-identify";
 import { GEOLOGY_CREDIT, GEOLOGY_TILE_URL } from "@/lib/geology-maps";
 import { HISTORICAL_CREDIT, HISTORICAL_DEFAULT_OPACITY, historicalTileUrl } from "@/lib/historical-maps";
 import { KIND_LABEL, LAKE_BOUNDS, LAKE_CENTER, REGION_LABELS, type Place, type PlaceKind } from "@/lib/places";
@@ -262,6 +263,8 @@ export function LakeMap({
   const addModeRef = useRef(addMode);
   const addKindRef = useRef(addKind);
   const placesRef = useRef(places);
+  const geologyRef = useRef(geology);
+  const identifyAbortRef = useRef<AbortController | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
   onSelectRef.current = onSelect;
@@ -273,6 +276,7 @@ export function LakeMap({
   addModeRef.current = addMode;
   addKindRef.current = addKind;
   placesRef.current = places;
+  geologyRef.current = geology;
   baseLayerIdRef.current = layer;
 
   useEffect(() => {
@@ -395,32 +399,62 @@ export function LakeMap({
           onPickPointRef.current(e.latlng.lat, e.latlng.lng);
           return;
         }
-        if (!measureRef.current) {
-          onSelectRef.current(null);
+        if (measureRef.current) {
+          const pt = { lat: e.latlng.lat, lon: e.latlng.lng };
+          const pts = measurePts.current;
+          if (pts.length >= 2) {
+            pts.length = 0;
+            measureLine.current?.remove();
+            measureLine.current = null;
+          }
+          pts.push(pt);
+          if (pts.length === 1) {
+            onMeasureRef.current("Tap a second point");
+          } else if (pts.length === 2) {
+            const miles = haversineMiles(pts[0]!, pts[1]!);
+            measureLine.current?.remove();
+            measureLine.current = L.polyline(
+              [
+                [pts[0]!.lat, pts[0]!.lon],
+                [pts[1]!.lat, pts[1]!.lon],
+              ],
+              { color: "#7eaea6", weight: 2, dashArray: "6 5", opacity: 0.95 },
+            ).addTo(map);
+            onMeasureRef.current(formatMiles(miles));
+          }
           return;
         }
-        const pt = { lat: e.latlng.lat, lon: e.latlng.lng };
-        const pts = measurePts.current;
-        if (pts.length >= 2) {
-          pts.length = 0;
-          measureLine.current?.remove();
-          measureLine.current = null;
+        if (geologyRef.current) {
+          onSelectRef.current(null);
+          const { lat, lng } = e.latlng;
+          identifyAbortRef.current?.abort();
+          const ac = new AbortController();
+          identifyAbortRef.current = ac;
+          const loading = L.popup({ maxWidth: 320, className: "lf-geo-popup-wrap" })
+            .setLatLng(e.latlng)
+            .setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up bedrock…</p></div>')
+            .openOn(map);
+          void identifyGeologyAt(lat, lng, ac.signal)
+            .then((result) => {
+              if (ac.signal.aborted) return;
+              if (!result) {
+                loading.setContent(
+                  '<div class="lf-geo-popup"><p class="lf-geo-expl">No geologic unit found here.</p></div>',
+                );
+                return;
+              }
+              loading.setContent(geologyPopupHtml(result, escapeHtml));
+            })
+            .catch((err: unknown) => {
+              if (ac.signal.aborted) return;
+              const msg = err instanceof Error ? err.message : "Identify failed";
+              loading.setContent(
+                `<div class="lf-geo-popup"><p class="lf-geo-expl">${escapeHtml(msg)}</p></div>`,
+              );
+            });
+          return;
         }
-        pts.push(pt);
-        if (pts.length === 1) {
-          onMeasureRef.current("Tap a second point");
-        } else if (pts.length === 2) {
-          const miles = haversineMiles(pts[0]!, pts[1]!);
-          measureLine.current?.remove();
-          measureLine.current = L.polyline(
-            [
-              [pts[0]!.lat, pts[0]!.lon],
-              [pts[1]!.lat, pts[1]!.lon],
-            ],
-            { color: "#7eaea6", weight: 2, dashArray: "6 5", opacity: 0.95 },
-          ).addTo(map);
-          onMeasureRef.current(formatMiles(miles));
-        }
+        onSelectRef.current(null);
       });
 
       if (!cancelled) setMapReady(true);
@@ -428,6 +462,7 @@ export function LakeMap({
 
     return () => {
       cancelled = true;
+      identifyAbortRef.current?.abort();
       setMapReady(false);
       mapRef.current?.remove();
       mapRef.current = null;
@@ -536,6 +571,8 @@ export function LakeMap({
       if (!map.hasLayer(geo)) geo.addTo(map);
     } else if (map.hasLayer(geo)) {
       map.removeLayer(geo);
+      map.closePopup();
+      identifyAbortRef.current?.abort();
     }
   }, [geology, geoOpacity, mapReady]);
 

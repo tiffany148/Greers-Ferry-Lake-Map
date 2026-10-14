@@ -263,6 +263,76 @@
   mix-blend-mode: multiply;
 }
 
+.lf-geo-popup-wrap .leaflet-popup-content-wrapper {
+  background: color-mix(in oklab, var(--color-surface) 96%, transparent);
+  color: var(--color-fg);
+  border-radius: 12px;
+  box-shadow: var(--shadow-panel, 0 8px 28px rgb(0 0 0 / 0.35));
+}
+
+.lf-geo-popup-wrap .leaflet-popup-tip {
+  background: color-mix(in oklab, var(--color-surface) 96%, transparent);
+}
+
+.lf-geo-popup {
+  min-width: 12rem;
+  max-width: 18rem;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.lf-geo-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.lf-geo-swatch {
+  flex: 0 0 auto;
+  width: 0.85rem;
+  height: 0.85rem;
+  margin-top: 0.2rem;
+  border-radius: 3px;
+  border: 1px solid rgb(0 0 0 / 0.25);
+}
+
+.lf-geo-row {
+  display: grid;
+  grid-template-columns: 5.5rem 1fr;
+  gap: 0.35rem;
+  margin: 0.2rem 0;
+}
+
+.lf-geo-k {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.lf-geo-v {
+  color: var(--color-fg);
+}
+
+.lf-geo-expl {
+  margin: 0.55rem 0 0;
+  color: var(--color-fg);
+}
+
+.lf-geo-src,
+.lf-geo-credit {
+  margin: 0.45rem 0 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-muted);
+}
+
 /* Street / place name tiles sit above sat, topo, and historical overlays. */
 .lf-street-labels {
   filter: drop-shadow(0 0 1px rgb(0 0 0 / 0.85)) drop-shadow(0 1px 2px rgb(0 0 0 / 0.55));

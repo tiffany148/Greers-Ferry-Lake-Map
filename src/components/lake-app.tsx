@@ -316,18 +316,21 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
             <span className="hidden sm:inline">{historical ? "1963 topo" : "Before the dam"}</span>
           </Button>
           {historical ? (
-            <label className="flex w-40 items-center gap-2 rounded-sm bg-surface px-3 py-2 shadow-panel">
-              <span className="text-xs font-medium tracking-wide text-muted uppercase">Fade</span>
+            <label className="flex w-44 items-center gap-2 rounded-sm bg-surface px-3 py-2 shadow-panel">
+              <span className="text-xs font-medium tracking-wide text-muted uppercase">Opacity</span>
               <input
                 type="range"
-                min={0.2}
+                min={0.15}
                 max={1}
                 step={0.02}
                 value={histOpacity}
                 onChange={(e) => setHistOpacity(Number(e.target.value))}
                 className="lf-range min-w-0 flex-1"
-                aria-label="Historical map strength"
+                aria-label="Before the dam opacity"
               />
+              <span className="w-8 text-right text-xs tabular-nums text-muted">
+                {Math.round(histOpacity * 100)}
+              </span>
             </label>
           ) : null}
           <Button
@@ -341,18 +344,21 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
             <span className="hidden sm:inline">Geology</span>
           </Button>
           {geology ? (
-            <label className="flex w-40 items-center gap-2 rounded-sm bg-surface px-3 py-2 shadow-panel">
-              <span className="text-xs font-medium tracking-wide text-muted uppercase">Fade</span>
+            <label className="flex w-44 items-center gap-2 rounded-sm bg-surface px-3 py-2 shadow-panel">
+              <span className="text-xs font-medium tracking-wide text-muted uppercase">Opacity</span>
               <input
                 type="range"
-                min={0.15}
-                max={0.85}
+                min={0.1}
+                max={0.9}
                 step={0.02}
                 value={geoOpacity}
                 onChange={(e) => setGeoOpacity(Number(e.target.value))}
                 className="lf-range min-w-0 flex-1"
-                aria-label="Geology overlay strength"
+                aria-label="Geology opacity"
               />
+              <span className="w-8 text-right text-xs tabular-nums text-muted">
+                {Math.round(geoOpacity * 100)}
+              </span>
             </label>
           ) : null}
           <Button
@@ -417,6 +423,11 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
           {addMode && !draftPoint ? (
             <p className="max-w-[11rem] rounded-sm bg-surface px-3 py-1.5 text-xs text-fg shadow-panel">
               Tap the map to place {addMeta.label.toLowerCase()}
+            </p>
+          ) : null}
+          {geology && !addMode && !measure ? (
+            <p className="max-w-[12rem] rounded-sm bg-surface px-3 py-1.5 text-xs text-fg shadow-panel">
+              Tap the map for rock type
             </p>
           ) : null}
         </div>
@@ -940,8 +951,10 @@ function AboutCard({ onClose }: { onClose: () => void }) {
           Ferry Lake cove names map. Anyone can add a cove name, water depth, temperature, hazard, or
           custom pin — those shared marks show on every device. Saved hearts stay on this device.
           Overlays stack: turn on Before the dam (USGS topo ≤1963, including Stark and the old
-          roads/railway) and Geology (Macrostrat / USGS bedrock) together. Zoom in for street labels
-          on sat, topo, and Map — they stay above overlays.
+          roads/railway) and Geology (Macrostrat / USGS bedrock) together — each has its own opacity
+          slider. With Geology on, tap the map for rock type, age, and a short explanation
+          (Macrostrat identify). Zoom in for street labels on sat, topo, and Map — they stay above
+          overlays.
         </p>
       </div>
     </div>

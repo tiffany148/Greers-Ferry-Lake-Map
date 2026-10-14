@@ -34,11 +34,32 @@
     }
     button.tool.on { background: var(--accent); color: #08323c; font-weight: 700; }
     .layers { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; }
-    .overlays { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; }
+    .overlays { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; align-items: center; }
     .overlays .label {
       flex: 0 0 auto; align-self: center; font-size: 11px; color: var(--muted);
       text-transform: uppercase; letter-spacing: 0.04em; margin-right: 2px;
     }
+    .fade-wrap {
+      display: none; flex: 0 0 auto; align-items: center; gap: 6px;
+      background: var(--panel); border: 1px solid #1f6276; border-radius: 10px;
+      padding: 4px 8px; font-size: 11px; color: var(--muted);
+    }
+    .fade-wrap.show { display: flex; }
+    .fade-wrap input[type="range"] { width: 72px; accent-color: var(--accent); }
+    .fade-wrap .pct { min-width: 2.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    .geo-hint {
+      display: none; position: absolute; top: 118px; left: 10px; right: 10px; z-index: 1100;
+      background: rgba(11,61,77,.94); color: var(--text); border: 1px solid #1f6276;
+      border-radius: 10px; padding: 8px 10px; font-size: 12px; text-align: center;
+    }
+    .geo-hint.show { display: block; }
+    .lf-geo-popup { min-width: 12rem; max-width: 18rem; font-size: 13px; line-height: 1.4; }
+    .lf-geo-title { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; font-size: 15px; }
+    .lf-geo-swatch { width: 12px; height: 12px; margin-top: 3px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3); flex: 0 0 auto; }
+    .lf-geo-row { display: grid; grid-template-columns: 5.2rem 1fr; gap: 4px; margin: 3px 0; }
+    .lf-geo-k { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .lf-geo-expl { margin: 8px 0 0; }
+    .lf-geo-src, .lf-geo-credit { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
     .sheet {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000;
       height: 42vh; display: flex; flex-direction: column;
@@ -96,9 +117,20 @@
     <div class="overlays" id="overlays">
       <span class="label">Stack</span>
       <button class="tool" data-overlay="hist" aria-pressed="false">Before the dam</button>
+      <label class="fade-wrap" id="histFade">
+        Opacity
+        <input type="range" id="histOpacity" min="0.15" max="1" step="0.02" value="0.78" aria-label="Before the dam opacity" />
+        <span class="pct" id="histPct">78</span>
+      </label>
       <button class="tool" data-overlay="geo" aria-pressed="false">Geology</button>
+      <label class="fade-wrap" id="geoFade">
+        Opacity
+        <input type="range" id="geoOpacity" min="0.1" max="0.9" step="0.02" value="0.55" aria-label="Geology opacity" />
+        <span class="pct" id="geoPct">55</span>
+      </label>
     </div>
   </header>
+  <div class="geo-hint" id="geoHint">Geology on — tap the map for rock type &amp; age</div>
   <section class="sheet mid" id="sheet">
     <div class="handle-wrap" id="handle"><div class="handle"></div></div>
     <div class="filters">
@@ -114,9 +146,9 @@
       <div class="list" id="list"></div>
       <p class="note">
         Tap <b>Add pin</b>, then tap the map to name a cove. Pins save on this phone.
-        Basemaps (Streets / Satellite / Topo) are exclusive. <b>Before the dam</b> and <b>Geology</b> stack on top and can both stay on.
-        Geology is Macrostrat / USGS bedrock. Before the dam uses USGS topo ≤1963.
-        Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
+        Basemaps (Streets / Satellite / Topo) are exclusive. <b>Before the dam</b> and <b>Geology</b> stack on top and can both stay on — each has its own opacity slider.
+        With Geology on, tap the map for rock type, age, and a short explanation (Macrostrat / USGS).
+        Before the dam uses USGS topo ≤1963. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
   </section>
@@ -364,6 +396,15 @@
     let currentBase = basemaps.streets.addTo(map);
     let histOn = false;
     let geoOn = false;
+    let addMode = false;
+    let identifyAbort = null;
+    const histOpacityEl = document.getElementById("histOpacity");
+    const geoOpacityEl = document.getElementById("geoOpacity");
+    const histFade = document.getElementById("histFade");
+    const geoFade = document.getElementById("geoFade");
+    const histPct = document.getElementById("histPct");
+    const geoPct = document.getElementById("geoPct");
+    const geoHint = document.getElementById("geoHint");
 
     function syncLabels() {
       const want = currentBase !== basemaps.streets;
@@ -376,6 +417,23 @@
       }
     }
 
+    function syncOverlayChrome() {
+      histFade.classList.toggle("show", histOn);
+      geoFade.classList.toggle("show", geoOn);
+      geoHint.classList.toggle("show", geoOn && !addMode);
+      histPct.textContent = String(Math.round(Number(histOpacityEl.value) * 100));
+      geoPct.textContent = String(Math.round(Number(geoOpacityEl.value) * 100));
+    }
+
+    histOpacityEl.addEventListener("input", () => {
+      histLayer.setOpacity(Number(histOpacityEl.value));
+      syncOverlayChrome();
+    });
+    geoOpacityEl.addEventListener("input", () => {
+      geoLayer.setOpacity(Number(geoOpacityEl.value));
+      syncOverlayChrome();
+    });
+
     document.getElementById("basemap").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-base]");
       if (!btn) return;
@@ -387,6 +445,7 @@
     });
 
     document.getElementById("overlays").addEventListener("click", (e) => {
+      if (e.target.closest("input, label.fade-wrap")) return;
       const btn = e.target.closest("[data-overlay]");
       if (!btn) return;
       const id = btn.dataset.overlay;
@@ -394,14 +453,82 @@
         histOn = !histOn;
         btn.classList.toggle("on", histOn);
         btn.setAttribute("aria-pressed", histOn ? "true" : "false");
-        if (histOn) histLayer.addTo(map); else map.removeLayer(histLayer);
+        if (histOn) {
+          histLayer.setOpacity(Number(histOpacityEl.value));
+          histLayer.addTo(map);
+        } else map.removeLayer(histLayer);
       } else if (id === "geo") {
         geoOn = !geoOn;
         btn.classList.toggle("on", geoOn);
         btn.setAttribute("aria-pressed", geoOn ? "true" : "false");
-        if (geoOn) geoLayer.addTo(map); else map.removeLayer(geoLayer);
+        if (geoOn) {
+          geoLayer.setOpacity(Number(geoOpacityEl.value));
+          geoLayer.addTo(map);
+        } else {
+          map.removeLayer(geoLayer);
+          map.closePopup();
+          if (identifyAbort) identifyAbort.abort();
+        }
       }
+      syncOverlayChrome();
     });
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+    function tidyLith(lith) {
+      return lith.replace(/Major:\s*\{([^}]*)\}/gi, "$1").replace(/Minor:\s*\{([^}]*)\}/gi, "minor: $1").replace(/[{}]/g, "").replace(/\s+/g, " ").trim();
+    }
+    function pickUnit(units) {
+      const rank = { large: 0, medium: 1, small: 2, tiny: 3 };
+      const land = units.filter((u) => !/^(water|lake|reservoir)$/i.test((u.name || "").trim()));
+      const pool = land.length ? land : units;
+      return pool.slice().sort((a, b) => (rank[(a.scale || "").toLowerCase()] ?? 9) - (rank[(b.scale || "").toLowerCase()] ?? 9))[0] || null;
+    }
+    function unitHtml(u, refs) {
+      const title = (u.name || u.strat_name || "Unnamed map unit").trim();
+      const rock = u.lith ? tidyLith(u.lith) : "";
+      const age = (u.t_int_name && u.b_int_name && u.t_int_name !== u.b_int_name)
+        ? (u.b_int_name + " – " + u.t_int_name)
+        : (u.t_int_name || u.b_int_name || "");
+      const expl = (u.descrip || u.comments || "").trim()
+        || (rock ? ("Bedrock mapped as " + rock + (age ? " (" + age + ")" : "") + ".") : "Bedrock unit from the Macrostrat / USGS geologic map compilation.");
+      const swatch = u.color ? '<span class="lf-geo-swatch" style="background:' + esc(u.color) + '"></span>' : "";
+      let rows = "";
+      if (rock) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Rock type</span><span class="lf-geo-v">' + esc(rock) + "</span></div>";
+      if (age) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Age</span><span class="lf-geo-v">' + esc(age) + "</span></div>";
+      if (u.strat_name && u.strat_name.trim() && u.strat_name.trim() !== title) {
+        rows += '<div class="lf-geo-row"><span class="lf-geo-k">Unit</span><span class="lf-geo-v">' + esc(u.strat_name.trim()) + "</span></div>";
+      }
+      const srcRaw = (u.source_id != null && refs && refs[String(u.source_id)]) ? String(refs[String(u.source_id)]).trim() : "";
+      const src = srcRaw ? '<p class="lf-geo-src">' + esc(srcRaw.slice(0, 280)) + (srcRaw.length > 280 ? "…" : "") + "</p>" : "";
+      return '<div class="lf-geo-popup"><div class="lf-geo-title">' + swatch + "<strong>" + esc(title) + "</strong></div>"
+        + rows + '<p class="lf-geo-expl">' + esc(expl) + "</p>" + src
+        + '<p class="lf-geo-credit">Macrostrat / USGS · tap elsewhere to identify another area</p></div>';
+    }
+    async function identifyAt(latlng) {
+      if (identifyAbort) identifyAbort.abort();
+      identifyAbort = new AbortController();
+      const popup = L.popup({ maxWidth: 320 })
+        .setLatLng(latlng)
+        .setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up bedrock…</p></div>')
+        .openOn(map);
+      try {
+        const url = "https://macrostrat.org/api/v2/geologic_units/map?lat=" + encodeURIComponent(latlng.lat) + "&lng=" + encodeURIComponent(latlng.lng);
+        const res = await fetch(url, { signal: identifyAbort.signal, headers: { Accept: "application/json" } });
+        if (!res.ok) throw new Error("Macrostrat identify failed (" + res.status + ")");
+        const body = await res.json();
+        const unit = pickUnit((body.success && body.success.data) || []);
+        if (!unit) {
+          popup.setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">No geologic unit found here.</p></div>');
+          return;
+        }
+        popup.setContent(unitHtml(unit, (body.success && body.success.refs) || {}));
+      } catch (err) {
+        if (err && err.name === "AbortError") return;
+        popup.setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">' + esc((err && err.message) || "Identify failed") + "</p></div>");
+      }
+    }
 
     let mine = loadMine();
     const markers = [];
@@ -472,26 +599,32 @@
       render(document.querySelector(".chip.on").dataset.type);
     };
 
-    let addMode = false;
     const addBtn = document.getElementById("addPin");
     const banner = document.getElementById("banner");
     function setAddMode(on) {
       addMode = on;
       addBtn.classList.toggle("on", on);
       banner.classList.toggle("show", on);
+      syncOverlayChrome();
     }
     addBtn.addEventListener("click", () => setAddMode(!addMode));
     map.on("click", (ev) => {
-      if (!addMode) return;
-      const name = prompt("Name this spot (cove, hole, ramp, etc.)");
-      if (!name) { setAddMode(false); return; }
-      const note = prompt("Optional note") || "My pin";
-      mine.push({ id: String(Date.now()), name: name.trim(), type: "cove", lat: ev.latlng.lat, lng: ev.latlng.lng, note });
-      saveMine(mine);
-      setAddMode(false);
-      document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.type === "mine"));
-      render("mine");
+      if (addMode) {
+        const name = prompt("Name this spot (cove, hole, ramp, etc.)");
+        if (!name) { setAddMode(false); return; }
+        const note = prompt("Optional note") || "My pin";
+        mine.push({ id: String(Date.now()), name: name.trim(), type: "cove", lat: ev.latlng.lat, lng: ev.latlng.lng, note });
+        saveMine(mine);
+        setAddMode(false);
+        document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.type === "mine"));
+        render("mine");
+        return;
+      }
+      if (geoOn) {
+        void identifyAt(ev.latlng);
+      }
     });
+    syncOverlayChrome();
 
     document.getElementById("locate").addEventListener("click", () => {
       if (!navigator.geolocation) return alert("Location not available.");
