@@ -22,6 +22,16 @@ const AddInput = z.object({
   note: z.string().optional(),
 });
 
+const UpdateInput = z.object({
+  id: z.number().int().positive(),
+  name: z.string(),
+  note: z.string().optional(),
+});
+
+const IdInput = z.object({
+  id: z.number().int().positive(),
+});
+
 function cleanName(raw: string) {
   return raw.replace(/\s+/g, " ").replace(/[\u0000-\u001f]/g, "").trim();
 }
@@ -106,5 +116,61 @@ export const addCommunityCove = createServerFn({ method: "POST" })
       `;
       if (!cove) return { ok: false, error: "Could not save that cove. Try again." };
       return { ok: true, cove };
+    },
+  );
+
+export const updateCommunityCove = createServerFn({ method: "POST" })
+  .validator((data: unknown) => UpdateInput.parse(data))
+  .handler(
+    async ({
+      data,
+    }): Promise<{ ok: true; cove: CommunityCoveRow } | { ok: false; error: string }> => {
+      const name = cleanName(data.name);
+      const noteRaw = data.note ? cleanName(data.note) : "";
+      const note = noteRaw.length > 0 ? noteRaw : null;
+
+      if (name.length < 2 || name.length > 48) {
+        return { ok: false, error: "Use a cove name between 2 and 48 characters." };
+      }
+      if (note && note.length > 160) {
+        return { ok: false, error: "Keep the note under 160 characters." };
+      }
+      if (looksLikeSpam(name) || (note && looksLikeSpam(note))) {
+        return { ok: false, error: "Leave links and addresses off the pin." };
+      }
+
+      const sql = await getSql();
+      const key = name.toLowerCase();
+      if (PLACES.some((p) => p.name.toLowerCase() === key)) {
+        return { ok: false, error: "That name is already on the official map." };
+      }
+      const dupes = await sql<{ id: number }>`
+        select id from community_coves where lower(name) = ${key} and id <> ${data.id}
+      `;
+      if (dupes[0]) {
+        return { ok: false, error: "Someone already added that cove name." };
+      }
+
+      const [cove] = await sql<CommunityCoveRow>`
+        update community_coves
+        set name = ${name}, note = ${note}
+        where id = ${data.id}
+        returning id, name, lat, lon, note
+      `;
+      if (!cove) return { ok: false, error: "That cove is gone — refresh and try again." };
+      return { ok: true, cove };
+    },
+  );
+
+export const deleteCommunityCove = createServerFn({ method: "POST" })
+  .validator((data: unknown) => IdInput.parse(data))
+  .handler(
+    async ({ data }): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const sql = await getSql();
+      const rows = await sql<{ id: number }>`
+        delete from community_coves where id = ${data.id} returning id
+      `;
+      if (!rows[0]) return { ok: false, error: "That cove is already gone." };
+      return { ok: true };
     },
   );

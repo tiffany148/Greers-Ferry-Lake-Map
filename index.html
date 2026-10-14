@@ -53,6 +53,35 @@
       border-radius: 10px; padding: 8px 10px; font-size: 12px; text-align: center;
     }
     .geo-hint.show { display: block; }
+    .add-menu {
+      display: none; position: absolute; top: 108px; right: 10px; z-index: 1200;
+      width: min(240px, calc(100vw - 20px)); background: rgba(11,61,77,.98);
+      border: 1px solid #1f6276; border-radius: 12px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .add-menu.show { display: block; }
+    .add-menu button {
+      display: block; width: 100%; text-align: left; background: var(--card); color: var(--text);
+      border: 1px solid #1f6276; border-radius: 8px; padding: 8px 10px; margin: 4px 0; font-size: 13px;
+    }
+    .add-menu button small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .detail {
+      display: none; position: absolute; left: 10px; right: 10px; bottom: calc(120px + env(safe-area-inset-bottom));
+      z-index: 1200; background: rgba(11,61,77,.98); border: 1px solid #1f6276; border-radius: 14px;
+      padding: 12px; max-height: 42vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,.4);
+    }
+    .detail.show { display: block; }
+    .detail h3 { margin: 0 0 4px; font-size: 16px; }
+    .detail .meta { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .detail p { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
+    .detail .row { margin-top: 6px; font-size: 12px; color: var(--text); }
+    .detail .row span { color: var(--muted); }
+    .detail .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .detail .btns button { background: var(--card); color: var(--accent); border: 1px solid #2a6b7c; border-radius: 8px; padding: 7px 10px; font-size: 12px; }
+    .detail .btns button.danger { color: #ffb4a8; }
+    .detail input, .detail select {
+      width: 100%; margin-top: 6px; background: var(--card); color: var(--text);
+      border: 1px solid #1f6276; border-radius: 8px; padding: 8px; font-size: 13px;
+    }
     .lf-geo-popup { min-width: 12rem; max-width: 18rem; font-size: 13px; line-height: 1.4; }
     .lf-geo-title { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; font-size: 15px; }
     .lf-geo-swatch { width: 12px; height: 12px; margin-top: 3px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3); flex: 0 0 auto; }
@@ -98,7 +127,15 @@
 </head>
 <body>
   <div id="map"></div>
-  <div class="banner" id="banner">Tap the map to drop your cove pin</div>
+  <div class="banner" id="banner">Tap the map to drop your pin</div>
+  <div class="add-menu" id="addMenu" role="menu">
+    <button type="button" data-add="cove">Cove name<small>Local pocket name</small></button>
+    <button type="button" data-add="depth">Water depth<small>Sounding in feet</small></button>
+    <button type="button" data-add="temperature">Temperature<small>Surface °F</small></button>
+    <button type="button" data-add="hazard">Hazard<small>Stump, rock, shoal…</small></button>
+    <button type="button" data-add="pin">Custom pin<small>Any mark on this phone</small></button>
+  </div>
+  <div class="detail" id="detail"></div>
   <header>
     <div class="row">
       <div class="brand">
@@ -145,7 +182,7 @@
     <div class="sheet-body">
       <div class="list" id="list"></div>
       <p class="note">
-        Tap <b>Add pin</b>, then tap the map to name a cove. Pins save on this phone.
+        Tap <b>Add pin</b> and choose a type (cove, depth, temperature, hazard, or custom). Tap a pin for info — my pins can be edited or deleted. Pins save on this phone.
         Basemaps (Streets / Satellite / Topo) are exclusive. <b>Before the dam</b> and <b>Geology</b> stack on top and can both stay on — each has its own opacity slider.
         With Geology on, tap the map for rock type, age, and a short explanation (Macrostrat / USGS).
         Before the dam uses USGS topo ≤1963. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
@@ -163,11 +200,11 @@
       { name: "Kidney Cove", type: "cove", lat: 35.529065, lng: -92.054001, note: "From lake map data (KML)." },
       { name: "Silver Ridge Peninsula", type: "cove", lat: 35.516682, lng: -92.052897, note: "From lake map data (KML)." },
       { name: "Tannenbaum", type: "cove", lat: 35.524065, lng: -92.061556, note: "From lake map data (KML)." },
-      { name: "Heber Springs Marina/Heber Rec.", type: "marina", lat: 35.501211, lng: -92.058959, note: "From lake map data (KML)." },
+      { name: "Heber Springs Marina/Heber Rec.", type: "marina", lat: 35.501211, lng: -92.058959, note: "In-town marina at Heber Springs Recreation Area \u2014 south-shore hub since the reservoir opened.", address: "99 Park Rd, Heber Springs, AR 72543", phone: "501-362-8838" },
       { name: "Scout Island", type: "cove", lat: 35.535427, lng: -92.076655, note: "Near Goat Island, north of Eden Isle." },
       { name: "Goat Island", type: "cove", lat: 35.519176, lng: -92.086056, note: "Island north of Eden Isle Marina." },
       { name: "Bird Island", type: "cove", lat: 35.528582, lng: -92.024903, note: "Long narrow island, Big Water. Purple martins roost here." },
-      { name: "Eden Isle Marina", type: "marina", lat: 35.501338, lng: -92.095372, note: "10 Yacht Harbor Rd. 501-362-2232" },
+      { name: "Eden Isle Marina", type: "marina", lat: 35.501338, lng: -92.095372, note: "Full-service marina on the Eden Isle peninsula (1960s resort era). Fuel, slips, boat services. Goat & Scout Islands to the north.", address: "10 Yacht Harbor Rd, Heber Springs, AR 72543", phone: "501-362-2232" },
       { name: "Eden Isle", type: "cove", lat: 35.505689, lng: -92.102956, note: "From lake map data (KML)." },
       { name: "Lake Eden", type: "cove", lat: 35.499082, lng: -92.10374, note: "From lake map data (KML)." },
       { name: "Big Dike", type: "cove", lat: 35.476262, lng: -92.08944, note: "From lake map data (KML)." },
@@ -179,10 +216,10 @@
       { name: "Tortoise Bay", type: "cove", lat: 35.538393, lng: -92.213294, note: "From lake map data (KML)." },
       { name: "Parker Island", type: "park", lat: 35.537814, lng: -92.205221, note: "From lake map data (KML)." },
       { name: "Bondair", type: "cove", lat: 35.538902, lng: -92.182669, note: "From lake map data (KML)." },
-      { name: "Shiloh Marina", type: "marina", lat: 35.539241, lng: -92.146164, note: "Slips, fuel, rentals." },
+      { name: "Shiloh Marina", type: "marina", lat: 35.539241, lng: -92.146164, note: "Marina at Shiloh Rec \u2014 first slips after the Narrows. Historic Shiloh community sat nearby before the lake filled.", address: "Shiloh Recreation Area, Greers Ferry / Heber Springs, AR" },
       { name: "Puddin' Ridge", type: "cove", lat: 35.543227, lng: -92.114992, note: "From lake map data (KML)." },
       { name: "Hurricane Bay", type: "cove", lat: 35.549944, lng: -92.177319, note: "From lake map data (KML)." },
-      { name: "Lacey's Narrows Marina", type: "marina", lat: 35.559644, lng: -92.19424, note: "7674 Edgemont Rd. 501-825-6214" },
+      { name: "Lacey's Narrows Marina", type: "marina", lat: 35.559644, lng: -92.19424, note: "Marina in the gorge between the two lakes at Narrows Park. Staging point for running the Narrows.", address: "7674 Edgemont Rd, Higden, AR 72067", phone: "501-825-6214" },
       { name: "The Narrows/Main Channel", type: "cove", lat: 35.551077, lng: -92.186995, note: "From lake map data (KML)." },
       { name: "Lake Ice Rd.", type: "cove", lat: 35.539431, lng: -92.207449, note: "From lake map data (KML)." },
       { name: "Poker Hill", type: "cove", lat: 35.578382, lng: -92.202442, note: "From lake map data (KML)." },
@@ -194,7 +231,7 @@
       { name: "Middle Fork", type: "cove", lat: 35.614166, lng: -92.194603, note: "From lake map data (KML)." },
       { name: "Skypoint", type: "cove", lat: 35.604237, lng: -92.140621, note: "From lake map data (KML)." },
       { name: "Midway Bluffs", type: "cove", lat: 35.607176, lng: -92.126071, note: "From lake map data (KML)." },
-      { name: "Hill Creek Marina", type: "marina", lat: 35.607768, lng: -92.149141, note: "North shore marina." },
+      { name: "Hill Creek Marina", type: "marina", lat: 35.607768, lng: -92.149141, note: "Quiet north-shore marina at Hill Creek Cove near Edgemont, with Corps camping next door.", address: "Hill Creek Rd, Edgemont, AR 72044" },
       { name: "Shirley", type: "cove", lat: 35.65542, lng: -92.32029, note: "From lake map data (KML)." },
       { name: "Wild Goose Creek", type: "cove", lat: 35.656606, lng: -92.219716, note: "From lake map data (KML)." },
       { name: "Birdie Hollow", type: "cove", lat: 35.643879, lng: -92.221298, note: "From lake map data (KML)." },
@@ -217,7 +254,7 @@
       { name: "Lynn Creek", type: "cove", lat: 35.58301, lng: -92.289688, note: "From lake map data (KML)." },
       { name: "Enchanted Peninsula", type: "cove", lat: 35.57754, lng: -92.247412, note: "From lake map data (KML)." },
       { name: "Snakehead Cove", type: "cove", lat: 35.5749, lng: -92.283759, note: "From lake map data (KML)." },
-      { name: "Fairfield Bay Marina", type: "marina", lat: 35.566796, lng: -92.297438, note: "4350 AR 330 S. 501-884-6030" },
+      { name: "Fairfield Bay Marina", type: "marina", lat: 35.566796, lng: -92.297438, note: "Full-service marina on Hwy 330. Fuel, rentals, slips, seasonal Sugar Loaf Island shuttle. Resort waterfront since the 1960s\u201370s.", address: "4350 AR-330 S, Fairfield Bay, AR 72088", phone: "501-884-6030" },
       { name: "Boat Ridge Island", type: "cove", lat: 35.553687, lng: -92.315971, note: "From lake map data (KML)." },
       { name: "Green Creek", type: "cove", lat: 35.556865, lng: -92.317727, note: "From lake map data (KML)." },
       { name: "Party Cove", type: "cove", lat: 35.5605, lng: -92.332248, note: "From lake map data (KML)." },
@@ -228,7 +265,7 @@
       { name: "Archey Creek", type: "cove", lat: 35.590336, lng: -92.446911, note: "From lake map data (KML)." },
       { name: "Pee Dee Creek", type: "cove", lat: 35.591895, lng: -92.413845, note: "From lake map data (KML)." },
       { name: "Choctaw Creek", type: "cove", lat: 35.531929, lng: -92.363545, note: "From lake map data (KML)." },
-      { name: "Choctaw Marina", type: "marina", lat: 35.531265, lng: -92.38321, note: "From lake map data (KML)." },
+      { name: "Choctaw Marina", type: "marina", lat: 35.531265, lng: -92.38321, note: "West-end marina by Choctaw Rec \u2014 long known as Furgerson's. Last/first fuel on the Choctaw Creek arm.", address: "3848\u20133850 Hwy 330 E, Clinton, AR 72031", phone: "501-745-2666" },
       { name: "Emerald Isle", type: "cove", lat: 35.552498, lng: -92.335119, note: "From lake map data (KML)." },
       { name: "Eglantine", type: "cove", lat: 35.562269, lng: -92.309703, note: "From lake map data (KML)." },
       { name: "Quiet Cove", type: "cove", lat: 35.562445, lng: -92.318539, note: "From lake map data (KML)." },
@@ -274,13 +311,13 @@
       { name: "US Army Corps of Engineers", type: "cove", lat: 35.521815, lng: -91.999412, note: "From lake map data (KML)." },
       { name: "Little Red River", type: "cove", lat: 35.51819, lng: -91.995799, note: "From lake map data (KML)." },
       { name: "Old Hwy 25 Park Beach", type: "swim", lat: 35.5342, lng: -92.015465, note: "From lake map data (KML)." },
-      { name: "Damsite Marina", type: "marina", lat: 35.529991, lng: -92.009381, note: "From lake map data (KML)." },
+      { name: "Damsite Marina", type: "marina", lat: 35.529991, lng: -92.009381, note: "Marina inside Dam Site Recreation Area near the dam and visitor center (Kennedy dedication, 1963).", address: "Dam Site Recreation Area, Heber Springs, AR", phone: "501-362-2333" },
       { name: "Sugar Loaf Mountain", type: "cove", lat: 35.56403, lng: -92.265491, note: "Island mountain. Boat-access hiking trail." },
-      { name: "Sugar Loaf Marina", type: "marina", lat: 35.546783, lng: -92.27443, note: "From lake map data (KML)." },
+      { name: "Sugar Loaf Marina", type: "marina", lat: 35.546783, lng: -92.27443, note: "South-shore marina at Sugar Loaf Park looking at Sugar Loaf Mountain Island trail.", address: "1389 Resort Rd / Sugar Loaf Rec Area, Higden, AR" },
       { name: "Peter Creek", type: "cove", lat: 35.56285, lng: -91.977983, note: "From lake map data (KML)." },
       { name: "Copperas Spring Hollow", type: "cove", lat: 35.549816, lng: -92.024945, note: "From lake map data (KML)." },
       { name: "Little Peter Creek", type: "cove", lat: 35.56502, lng: -92.015573, note: "From lake map data (KML)." },
-      { name: "Cherokee Park", type: "park", lat: 35.552298, lng: -92.077528, note: "475 Cherokee Park Rd." },
+      { name: "Cherokee Park", type: "park", lat: 35.552298, lng: -92.077528, note: "Seasonal NE-shore campground looking toward Scout Island.", address: "475 Cherokee Park Rd, Heber Springs, AR" },
       { name: "Dug Hill Rd.", type: "cove", lat: 35.55346, lng: -92.017961, note: "From lake map data (KML)." },
       { name: "Collinâs Creek", type: "cove", lat: 35.514068, lng: -91.991271, note: "From lake map data (KML)." },
       { name: "Cow Shoals", type: "cove", lat: 35.513478, lng: -91.938331, note: "From lake map data (KML)." },
@@ -301,39 +338,54 @@
       { name: "Mastercraft Alley", type: "cove", lat: 35.620144, lng: -92.190136, note: "From lake map data (KML)." },
       { name: "Fairfield Bay Bluffs/Cliffs", type: "cove", lat: 35.573353, lng: -92.280515, note: "From lake map data (KML)." },
       { name: "Budd Creek", type: "cove", lat: 35.55657, lng: -92.121844, note: "From lake map data (KML)." },
-      { name: "Narrows Park", type: "park", lat: 35.56397, lng: -92.19821, note: "7699 Edgemont Rd. Camp + ramp + marina." },
+      { name: "Narrows Park", type: "park", lat: 35.56397, lng: -92.19821, note: "Corps park on the gorge joining the two lakes. Camp + ramp + marina.", address: "7699 Edgemont Rd, Higden, AR 72067" },
       { name: "Narrows Park Ramp", type: "ramp", lat: 35.5618, lng: -92.1969, note: "Corps launch at the Narrows bridge." },
       { name: "The Narrows", type: "cove", lat: 35.5582, lng: -92.1935, note: "Gorge connecting upper and lower lake." },
       { name: "Shiloh Park", type: "park", lat: 35.53758, lng: -92.14599, note: "Campground, marina, swim beach." },
-      { name: "Heber Springs Marina", type: "marina", lat: 35.50202, lng: -92.05932, note: "99 Park Rd. 501-362-8838" },
-      { name: "Heber Springs Park", type: "park", lat: 35.504, lng: -92.0665, note: "89 Park Rd. Ramp + swim beach." },
+      { name: "Heber Springs Marina", type: "marina", lat: 35.50202, lng: -92.05932, note: "In-town marina at Heber Springs Recreation Area \u2014 south-shore hub since the reservoir opened.", address: "99 Park Rd, Heber Springs, AR 72543", phone: "501-362-8838" },
+      { name: "Heber Springs Park", type: "park", lat: 35.504, lng: -92.0665, note: "Seasonal Corps park with ramp + swim beach on the south shore.", address: "89 Park Rd, Heber Springs, AR 72543" },
       { name: "Heber Springs Park Ramp", type: "ramp", lat: 35.5032, lng: -92.0638, note: "Public launch." },
       { name: "Heber Springs Swim Beach", type: "swim", lat: 35.5024, lng: -92.0682, note: "No pets in day-use swim beaches." },
       { name: "Goff Point", type: "cove", lat: 35.47647, lng: -92.16071, note: "South-shore point." },
-      { name: "Dam Site Park", type: "park", lat: 35.522, lng: -91.9976, note: "315 Heber Springs Rd N." },
+      { name: "Dam Site Park", type: "park", lat: 35.522, lng: -91.9976, note: "Largest Corps park at the dam \u2014 camping, marina, swim beach; dedicated with the dam in 1963.", address: "315 Heber Springs Rd N, Heber Springs, AR 72543" },
       { name: "Dam Site Ramp", type: "ramp", lat: 35.5242, lng: -92.0048, note: "Launch near the dam." },
       { name: "Greers Ferry Dam", type: "park", lat: 35.52091, lng: -91.9932, note: "Dam and Little Red tailwater." },
       { name: "William Carl Garner Visitor Center", type: "park", lat: 35.5215, lng: -91.9994, note: "700 Heber Springs Rd N." },
-      { name: "John F. Kennedy Park", type: "park", lat: 35.51321, lng: -91.99684, note: "375 Hatchery Rd." },
+      { name: "John F. Kennedy Park", type: "park", lat: 35.51321, lng: -91.99684, note: "Year-round Corps park below the dam; named for the president who dedicated the project.", address: "375 Hatchery Rd, Heber Springs, AR 72543" },
       { name: "John F. Kennedy Ramp", type: "ramp", lat: 35.5148, lng: -91.9952, note: "Near hatchery / tailwater." },
       { name: "Old Highway 25 Park", type: "park", lat: 35.53946, lng: -92.01313, note: "Tumbling Shoals. Camp + swim + ramp." },
       { name: "Cherokee Park Ramp", type: "ramp", lat: 35.5562, lng: -92.0789, note: "NE lower lake launch." },
-      { name: "Devils Fork Park", type: "park", lat: 35.58463, lng: -92.17853, note: "73 Devils Fork Rd." },
+      { name: "Devils Fork Park", type: "park", lat: 35.58463, lng: -92.17853, note: "Year-round park on the Devil's Fork arm with ramps and swim areas.", address: "73 Devils Fork Rd, Greers Ferry, AR 72067" },
       { name: "Devils Fork Ramp", type: "ramp", lat: 35.5832, lng: -92.1808, note: "Multi-lane ramp." },
       { name: "Mill Creek Park", type: "park", lat: 35.58286, lng: -92.21821, note: "West of Greers Ferry." },
-      { name: "Hill Creek Park", type: "park", lat: 35.61091, lng: -92.14932, note: "474 Hill Creek Rd, Edgemont." },
+      { name: "Hill Creek Park", type: "park", lat: 35.61091, lng: -92.14932, note: "Seasonal park and marina on the Hill Creek arm near Edgemont.", address: "474 Hill Creek Rd, Edgemont, AR 72044" },
       { name: "Poker Hill Island", type: "cove", lat: 35.57841, lng: -92.2021, note: "Island near the Narrows / Higden." },
       { name: "Higden (old town area)", type: "cove", lat: 35.57341, lng: -92.20321, note: "Town at the Narrows; parts of old Higden were flooded in 1962." },
-      { name: "Sugar Loaf Park", type: "park", lat: 35.54261, lng: -92.27057, note: "1389 Resort Rd, Higden." },
+      { name: "Sugar Loaf Park", type: "park", lat: 35.54261, lng: -92.27057, note: "South-shore park facing Sugar Loaf Mountain Island.", address: "1389 Resort Rd, Higden, AR 72067" },
       { name: "Five Fingers / Fairfield Bay", type: "cove", lat: 35.605, lng: -92.27, note: "North / Five Fingers arms of the upper lake." },
-      { name: "Choctaw Park", type: "park", lat: 35.53286, lng: -92.38043, note: "3848 Hwy 330 E, Clinton." },
-      { name: "Choctaw / Furgerson's Marina", type: "marina", lat: 35.5338, lng: -92.3782, note: "501-745-2666" },
+      { name: "Choctaw Park", type: "park", lat: 35.53286, lng: -92.38043, note: "West-end full-service Corps park near Clinton.", address: "3848 Hwy 330 E, Clinton, AR 72031" },
+      { name: "Choctaw / Furgerson's Marina", type: "marina", lat: 35.5338, lng: -92.3782, note: "West-end marina by Choctaw Rec \u2014 long known as Furgerson's. Last/first fuel on the Choctaw Creek arm.", address: "3848\u20133850 Hwy 330 E, Clinton, AR 72031", phone: "501-745-2666" },
       { name: "Cove Creek Park", type: "park", lat: 35.46177, lng: -92.15386, note: "South end of the lower lake." },
+
     ];
 
-    const colors = { marina: "#3db8ff", ramp: "#7ed07a", park: "#e8c56b", swim: "#79b8ff", cove: "#d4a0ff", mine: "#ff8bd2" };
-    const STORE = "gfl-my-pins-v1";
-    const loadMine = () => { try { return JSON.parse(localStorage.getItem(STORE) || "[]"); } catch { return []; } };
+    const colors = {
+      marina: "#3db8ff", ramp: "#7ed07a", park: "#e8c56b", swim: "#79b8ff", cove: "#d4a0ff",
+      mine: "#ff8bd2", depth: "#5ec8ff", temperature: "#ff9f6b", hazard: "#ff6b6b", pin: "#c9a0ff"
+    };
+    const TYPE_LABEL = {
+      marina: "Marina", ramp: "Ramp", park: "Park", swim: "Swim", cove: "Cove",
+      mine: "My pin", depth: "Depth", temperature: "Temperature", hazard: "Hazard", pin: "Pin"
+    };
+    const STORE = "gfl-my-pins-v2";
+    const loadMine = () => {
+      try {
+        const v2 = JSON.parse(localStorage.getItem(STORE) || "null");
+        if (Array.isArray(v2)) return v2;
+        const v1 = JSON.parse(localStorage.getItem("gfl-my-pins-v1") || "[]");
+        return Array.isArray(v1) ? v1.map((p) => ({ ...p, type: p.type || "cove" })) : [];
+      } catch { return []; }
+    };
     const saveMine = (arr) => localStorage.setItem(STORE, JSON.stringify(arr));
 
     const HIST_SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer";
@@ -531,95 +583,258 @@
     }
 
     let mine = loadMine();
+    let addKind = "cove";
+    let selectedPlace = null;
+    let detailEditing = false;
     const markers = [];
+    const detailEl = document.getElementById("detail");
+    const addMenu = document.getElementById("addMenu");
     function allPlaces() {
-      return builtIn.concat(mine.map((p) => ({ ...p, type: "mine", custom: true })));
+      return builtIn.concat(mine.map((p) => ({ ...p, custom: true })));
     }
     function clearMarkers() {
       markers.forEach((m) => map.removeLayer(m));
       markers.length = 0;
+    }
+    function placePopupHtml(p) {
+      const bits = [`<strong>${esc(p.name)}</strong>`];
+      bits.push(`<div style="font-size:11px;color:#7ed0c8;margin:2px 0 4px">${esc(TYPE_LABEL[p.type] || p.type)}</div>`);
+      if (p.note) bits.push(esc(p.note));
+      if (p.address) bits.push(`<div style="margin-top:4px"><b>Address</b><br>${esc(p.address)}</div>`);
+      if (p.phone) bits.push(`<div style="margin-top:4px"><b>Phone</b> · <a href="tel:${esc(String(p.phone).replace(/\\D/g, ""))}">${esc(p.phone)}</a></div>`);
+      if (p.value) bits.push(`<div style="margin-top:4px"><b>Reading</b> · ${esc(p.value)}</div>`);
+      bits.push(`<br><a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>`);
+      bits.push(` · <a href="#" data-open-detail="${esc(p.custom ? p.id : p.name)}">Open info</a>`);
+      return bits.join("");
     }
     function addMarker(p) {
       const color = colors[p.type] || colors.cove;
       const m = L.circleMarker([p.lat, p.lng], {
         radius: p.custom ? 9 : 6, color: "#08323c", weight: 1, fillColor: color, fillOpacity: 0.95
       }).addTo(map);
-      const extra = p.custom ? `<br><button type="button" onclick="window._delPin('${p.id}')">Delete my pin</button>` : "";
-      m.bindPopup(`<strong>${p.name}</strong><br>${p.note || ""}<br><a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>${extra}`);
+      m.bindPopup(placePopupHtml(p));
       m.place = p;
+      m.on("click", (ev) => {
+        L.DomEvent.stopPropagation(ev);
+        openDetail(p);
+      });
       markers.push(m);
+    }
+    function currentFilter() {
+      return document.querySelector(".chip.on")?.dataset.type || "all";
     }
     function render(type) {
       const list = document.getElementById("list");
       list.innerHTML = "";
       clearMarkers();
-      allPlaces().filter((p) => type === "all" || p.type === type).forEach((p) => {
+      allPlaces().filter((p) => {
+        if (type === "all") return true;
+        if (type === "mine") return !!p.custom;
+        return p.type === type;
+      }).forEach((p) => {
         addMarker(p);
         const el = document.createElement("div");
         el.className = "item";
         el.innerHTML = `
           <div class="dot" style="background:${colors[p.type] || colors.cove}"></div>
           <div>
-            <h3>${p.name}</h3>
-            <p>${p.note || ""}</p>
+            <h3>${esc(p.name)}</h3>
+            <p>${esc(p.note || p.value || "")}</p>
             <a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Apple Maps</a>
           </div>
           <div class="actions">
-            <button data-go="${p.name.replace(/"/g, "&quot;")}">Show</button>
-            ${p.custom ? `<button data-del="${p.id}">Delete</button>` : ""}
+            <button data-go="${esc(p.custom ? p.id : p.name)}">Show</button>
+            ${p.custom ? `<button data-del="${esc(p.id)}">Delete</button>` : ""}
           </div>`;
         list.appendChild(el);
       });
     }
     render("all");
 
+    function closeDetail() {
+      selectedPlace = null;
+      detailEditing = false;
+      detailEl.classList.remove("show");
+      detailEl.innerHTML = "";
+    }
+    function openDetail(p, editing) {
+      selectedPlace = p;
+      detailEditing = !!editing;
+      const kind = TYPE_LABEL[p.type] || p.type;
+      if (detailEditing && p.custom) {
+        detailEl.innerHTML = `
+          <div class="meta">Edit · ${esc(kind)}</div>
+          <h3>${esc(p.name)}</h3>
+          ${(p.type === "depth" || p.type === "temperature") ? `<input id="dValue" value="${esc(p.value || "")}" placeholder="${p.type === "depth" ? "Depth e.g. 42 ft" : "Temp e.g. 78°F"}" />` : ""}
+          <input id="dName" value="${esc(p.name)}" placeholder="Name" />
+          <input id="dNote" value="${esc(p.note || "")}" placeholder="Optional note" />
+          <div class="btns">
+            <button type="button" id="dSave">Save</button>
+            <button type="button" id="dCancelEdit">Cancel</button>
+            <button type="button" class="danger" id="dDelete">Delete</button>
+          </div>`;
+      } else {
+        detailEl.innerHTML = `
+          <div class="meta">${esc(kind)}${p.custom ? " · My pin" : ""}</div>
+          <h3>${esc(p.name)}</h3>
+          ${p.note ? `<p>${esc(p.note)}</p>` : ""}
+          ${p.value ? `<div class="row"><span>Reading · </span>${esc(p.value)}</div>` : ""}
+          ${p.address ? `<div class="row"><span>Address · </span>${esc(p.address)}</div>` : ""}
+          ${p.phone ? `<div class="row"><span>Phone · </span><a href="tel:${esc(String(p.phone).replace(/\\D/g, ""))}">${esc(p.phone)}</a></div>` : ""}
+          <div class="row"><span>Coords · </span>${p.lat.toFixed(5)}°N ${Math.abs(p.lng).toFixed(5)}°W</div>
+          <div class="btns">
+            <a class="tool" style="text-decoration:none;display:inline-block" href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>
+            ${p.custom ? `<button type="button" id="dEdit">Edit</button><button type="button" class="danger" id="dDelete">Delete</button>` : ""}
+            <button type="button" id="dClose">Close</button>
+          </div>`;
+      }
+      detailEl.classList.add("show");
+      setSheet("min");
+    }
+    detailEl.addEventListener("click", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (t.id === "dClose") { closeDetail(); return; }
+      if (t.id === "dCancelEdit" && selectedPlace) { openDetail(selectedPlace, false); return; }
+      if (t.id === "dEdit" && selectedPlace) { openDetail(selectedPlace, true); return; }
+      if (t.id === "dDelete" && selectedPlace?.custom) {
+        if (!confirm('Delete "' + selectedPlace.name + '"?')) return;
+        mine = mine.filter((p) => p.id !== selectedPlace.id);
+        saveMine(mine);
+        closeDetail();
+        render(currentFilter());
+        return;
+      }
+      if (t.id === "dSave" && selectedPlace?.custom) {
+        const name = (document.getElementById("dName")?.value || "").trim();
+        const note = (document.getElementById("dNote")?.value || "").trim();
+        const value = (document.getElementById("dValue")?.value || "").trim();
+        if (name.length < 2) { alert("Use a name with at least 2 characters."); return; }
+        mine = mine.map((p) => p.id === selectedPlace.id ? { ...p, name, note: note || p.note, value: value || p.value } : p);
+        saveMine(mine);
+        const updated = mine.find((p) => p.id === selectedPlace.id);
+        render(currentFilter());
+        if (updated) openDetail({ ...updated, custom: true }, false);
+      }
+    });
+
     document.querySelector(".filters").addEventListener("click", (e) => {
       const chip = e.target.closest(".chip");
       if (!chip) return;
       document.querySelectorAll(".chip").forEach((c) => c.classList.remove("on"));
       chip.classList.add("on");
+      closeDetail();
       render(chip.dataset.type);
     });
 
     document.getElementById("list").addEventListener("click", (e) => {
       const del = e.target.closest("[data-del]");
-      if (del) { window._delPin(del.dataset.del); return; }
+      if (del) {
+        if (!confirm("Delete this pin?")) return;
+        mine = mine.filter((p) => p.id !== del.dataset.del);
+        saveMine(mine);
+        closeDetail();
+        render(currentFilter());
+        return;
+      }
       const btn = e.target.closest("[data-go]");
       if (!btn) return;
-      const p = allPlaces().find((x) => x.name === btn.dataset.go);
+      const key = btn.dataset.go;
+      const p = allPlaces().find((x) => (x.custom ? x.id : x.name) === key);
       if (!p) return;
       map.setView([p.lat, p.lng], 15);
-      const mk = markers.find((m) => m.place.name === p.name);
+      openDetail(p);
+      const mk = markers.find((m) => m.place === p || (m.place.name === p.name && m.place.lat === p.lat));
       if (mk) mk.openPopup();
     });
 
-    window._delPin = (id) => {
-      mine = mine.filter((p) => p.id !== id);
-      saveMine(mine);
-      render(document.querySelector(".chip.on").dataset.type);
-    };
+    map.on("popupopen", (e) => {
+      const node = e.popup.getElement();
+      if (!node) return;
+      node.querySelectorAll("[data-open-detail]").forEach((a) => {
+        a.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const key = a.getAttribute("data-open-detail");
+          const p = allPlaces().find((x) => (x.custom ? x.id : x.name) === key);
+          if (p) openDetail(p);
+        });
+      });
+    });
 
     const addBtn = document.getElementById("addPin");
     const banner = document.getElementById("banner");
-    function setAddMode(on) {
+    function setAddMode(on, kind) {
       addMode = on;
+      if (kind) addKind = kind;
       addBtn.classList.toggle("on", on);
       banner.classList.toggle("show", on);
+      addMenu.classList.remove("show");
+      const labels = {
+        cove: "Tap the map to drop a cove name",
+        depth: "Tap the map to drop a water-depth reading",
+        temperature: "Tap the map to drop a temperature reading",
+        hazard: "Tap the map to mark a hazard",
+        pin: "Tap the map to drop a custom pin"
+      };
+      banner.textContent = labels[addKind] || "Tap the map to drop your pin";
       syncOverlayChrome();
     }
-    addBtn.addEventListener("click", () => setAddMode(!addMode));
+    addBtn.addEventListener("click", () => {
+      if (addMode) { setAddMode(false); return; }
+      addMenu.classList.toggle("show");
+    });
+    addMenu.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-add]");
+      if (!btn) return;
+      setAddMode(true, btn.dataset.add);
+    });
+    document.addEventListener("click", (e) => {
+      if (!addMenu.classList.contains("show")) return;
+      if (e.target.closest("#addMenu, #addPin")) return;
+      addMenu.classList.remove("show");
+    });
     map.on("click", (ev) => {
       if (addMode) {
-        const name = prompt("Name this spot (cove, hole, ramp, etc.)");
-        if (!name) { setAddMode(false); return; }
-        const note = prompt("Optional note") || "My pin";
-        mine.push({ id: String(Date.now()), name: name.trim(), type: "cove", lat: ev.latlng.lat, lng: ev.latlng.lng, note });
+        let name = "";
+        let value = "";
+        let note = "";
+        if (addKind === "depth") {
+          value = prompt("Water depth (feet)") || "";
+          if (!value.trim()) { setAddMode(false); return; }
+          name = prompt("Optional label") || value.trim();
+          note = prompt("Optional note") || "";
+        } else if (addKind === "temperature") {
+          value = prompt("Water temperature (°F)") || "";
+          if (!value.trim()) { setAddMode(false); return; }
+          name = prompt("Optional label") || value.trim();
+          note = prompt("Optional note") || "";
+        } else if (addKind === "hazard") {
+          name = prompt("Hazard name (e.g. Stump field)") || "";
+          if (!name.trim()) { setAddMode(false); return; }
+          note = prompt("Optional note") || "";
+        } else {
+          name = prompt(addKind === "cove" ? "Cove name" : "Pin name") || "";
+          if (!name.trim()) { setAddMode(false); return; }
+          note = prompt("Optional note") || "";
+        }
+        const pin = {
+          id: String(Date.now()),
+          name: name.trim(),
+          type: addKind,
+          lat: ev.latlng.lat,
+          lng: ev.latlng.lng,
+          note: note.trim(),
+          value: value.trim()
+        };
+        mine.push(pin);
         saveMine(mine);
         setAddMode(false);
         document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.type === "mine"));
         render("mine");
+        openDetail({ ...pin, custom: true });
         return;
       }
+      // ignore map clicks that hit markers (they open detail themselves)
       if (geoOn) {
         void identifyAt(ev.latlng);
       }

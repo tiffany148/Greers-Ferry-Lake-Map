@@ -31,8 +31,19 @@ import {
   type PlaceKind,
   type RegionId,
 } from "@/lib/places";
-import { addCommunityCove, listCommunityCoves } from "@/lib/community-coves";
-import { addFieldPin, listFieldPins, type FieldPinKind } from "@/lib/field-pins";
+import {
+  addCommunityCove,
+  deleteCommunityCove,
+  listCommunityCoves,
+  updateCommunityCove,
+} from "@/lib/community-coves";
+import {
+  addFieldPin,
+  deleteFieldPin,
+  listFieldPins,
+  updateFieldPin,
+  type FieldPinKind,
+} from "@/lib/field-pins";
 import { GEOLOGY_DEFAULT_OPACITY } from "@/lib/geology-maps";
 import { HISTORICAL_DEFAULT_OPACITY } from "@/lib/historical-maps";
 import { cn } from "@/lib/utils";
@@ -73,6 +84,17 @@ type RegionFilter = "all" | RegionId;
 
 function coords(place: Place) {
   return `${place.lat.toFixed(5)}°N  ${Math.abs(place.lon).toFixed(5)}°W`;
+}
+
+function parseLocalId(id: string): number | null {
+  const m = /^local-(\d+)$/.exec(id);
+  return m ? Number(m[1]) : null;
+}
+
+function parseFieldId(id: string): { kind: FieldPinKind; id: number } | null {
+  const m = /^field-(depth|temperature|hazard|pin)-(\d+)$/.exec(id);
+  if (!m) return null;
+  return { kind: m[1] as FieldPinKind, id: Number(m[2]) };
 }
 
 export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
@@ -564,6 +586,14 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
                 saved={favs.has(selected.id)}
                 onSave={() => favs.toggle(selected.id)}
                 onClose={() => setSelectedId(null)}
+                onUpdated={(next, previousId) => {
+                  setShared((prev) => [next, ...prev.filter((p) => p.id !== previousId && p.id !== next.id)]);
+                  setSelectedId(next.id);
+                }}
+                onDeleted={(id) => {
+                  setShared((prev) => prev.filter((p) => p.id !== id));
+                  setSelectedId(null);
+                }}
               />
             ) : null}
 
@@ -673,13 +703,141 @@ function PlaceDetail({
   saved,
   onSave,
   onClose,
+  onUpdated,
+  onDeleted,
 }: {
   place: Place;
   saved: boolean;
   onSave: () => void;
   onClose: () => void;
+  onUpdated: (place: Place, previousId: string) => void;
+  onDeleted: (id: string) => void;
 }) {
   const Icon = KIND_ICON[place.kind];
+  const editable = !!(place.community || place.field);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState(place.name);
+  const [editValue, setEditValue] = useState(place.fieldValue ?? "");
+  const [editNote, setEditNote] = useState(
+    place.community || place.field
+      ? place.description.startsWith("A locally named") ||
+        place.description.startsWith("A shared") ||
+        place.description.startsWith("Reported water")
+        ? ""
+        : place.description
+      : "",
+  );
+  const [editError, setEditError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setEditing(false);
+    setEditName(place.name);
+    setEditValue(place.fieldValue ?? "");
+    setEditNote(
+      place.community || place.field
+        ? place.description.startsWith("A locally named") ||
+          place.description.startsWith("A shared") ||
+          place.description.startsWith("Reported water")
+          ? ""
+          : place.description
+        : "",
+    );
+    setEditError(null);
+  }, [place.id, place.name, place.fieldValue, place.description, place.community, place.field]);
+
+  async function saveEdit() {
+    setBusy(true);
+    setEditError(null);
+    try {
+      if (place.community) {
+        const id = parseLocalId(place.id);
+        if (id == null) {
+          setEditError("Could not edit that cove.");
+          return;
+        }
+        const result = await updateCommunityCove({
+          data: { id, name: editName, note: editNote || undefined },
+        });
+        if (!result.ok) {
+          setEditError(result.error);
+          return;
+        }
+        onUpdated(communityCoveToPlace(result.cove), place.id);
+        setEditing(false);
+        return;
+      }
+      if (place.field) {
+        const parsed = parseFieldId(place.id);
+        if (!parsed) {
+          setEditError("Could not edit that pin.");
+          return;
+        }
+        const result = await updateFieldPin({
+          data: {
+            id: parsed.id,
+            kind: parsed.kind,
+            title: editName || editValue,
+            value: editValue || undefined,
+            note: editNote || undefined,
+          },
+        });
+        if (!result.ok) {
+          setEditError(result.error);
+          return;
+        }
+        onUpdated(fieldPinToPlace(result.pin), place.id);
+        setEditing(false);
+      }
+    } catch {
+      setEditError("Could not save changes. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removePin() {
+    if (!editable) return;
+    if (!window.confirm(`Delete “${place.name}”? This removes it for everyone.`)) return;
+    setBusy(true);
+    setEditError(null);
+    try {
+      if (place.community) {
+        const id = parseLocalId(place.id);
+        if (id == null) {
+          setEditError("Could not delete that cove.");
+          return;
+        }
+        const result = await deleteCommunityCove({ data: { id } });
+        if (!result.ok) {
+          setEditError(result.error);
+          return;
+        }
+        onDeleted(place.id);
+        return;
+      }
+      if (place.field) {
+        const parsed = parseFieldId(place.id);
+        if (!parsed) {
+          setEditError("Could not delete that pin.");
+          return;
+        }
+        const result = await deleteFieldPin({ data: { id: parsed.id } });
+        if (!result.ok) {
+          setEditError(result.error);
+          return;
+        }
+        onDeleted(place.id);
+      }
+    } catch {
+      setEditError("Could not delete. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const needsValue = place.kind === "depth" || place.kind === "temperature";
+
   return (
     <article className="border-b border-border px-4 py-3">
       <div className="flex items-start justify-between gap-2">
@@ -700,40 +858,123 @@ function PlaceDetail({
           <X className="size-4" />
         </button>
       </div>
-      <p className="mt-2 text-sm leading-relaxed text-muted">{place.description}</p>
-      {place.access ? (
-        <p className="mt-2 text-xs text-fg">
-          <span className="text-muted">Access · </span>
-          {place.access}
-        </p>
-      ) : null}
-      {place.amenities && place.amenities.length > 0 ? (
-        <ul className="mt-3 flex flex-wrap gap-1.5">
-          {place.amenities.map((a) => (
-            <li
-              key={a}
-              className="rounded-full bg-elevated px-2.5 py-1 text-[11px] font-medium text-fg"
-            >
-              {a}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <p className="font-mono text-[11px] tabular-nums text-muted">{coords(place)}</p>
-        <button
-          type="button"
-          onClick={onSave}
-          aria-pressed={saved}
-          className={cn(
-            "inline-flex h-9 items-center gap-1.5 rounded-sm px-3 text-xs font-medium",
-            saved ? "bg-accent text-accent-fg" : "bg-elevated text-fg",
-          )}
+
+      {editing ? (
+        <form
+          className="mt-3 space-y-2 rounded-md bg-elevated/60 p-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void saveEdit();
+          }}
         >
-          <Heart className={cn("size-3.5", saved && "fill-current")} />
-          {saved ? "Saved" : "Save"}
-        </button>
+          <p className="text-xs font-medium tracking-[0.12em] text-accent uppercase">Edit pin</p>
+          {needsValue ? (
+            <Input
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              placeholder={place.kind === "depth" ? "Depth — e.g. 42 ft" : "Temp — e.g. 78°F"}
+              maxLength={24}
+              required
+            />
+          ) : null}
+          <Input
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            placeholder={place.community ? "Cove name" : "Title"}
+            maxLength={48}
+            required={!needsValue}
+          />
+          <Input
+            value={editNote}
+            onChange={(e) => setEditNote(e.target.value)}
+            placeholder="Optional note"
+            maxLength={160}
+          />
+          {editError ? <p className="text-sm text-danger">{editError}</p> : null}
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" size="sm" disabled={busy}>
+              {busy ? "Saving…" : "Save changes"}
+            </Button>
+            <Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => setEditing(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="mt-2 text-sm leading-relaxed text-muted">{place.description}</p>
+          {place.address ? (
+            <p className="mt-2 text-xs text-fg">
+              <span className="text-muted">Address · </span>
+              {place.address}
+            </p>
+          ) : null}
+          {place.phone ? (
+            <p className="mt-1 text-xs text-fg">
+              <span className="text-muted">Phone · </span>
+              <a className="text-accent underline-offset-2 hover:underline" href={`tel:${place.phone.replace(/\D/g, "")}`}>
+                {place.phone}
+              </a>
+            </p>
+          ) : null}
+          {place.access ? (
+            <p className="mt-2 text-xs text-fg">
+              <span className="text-muted">Access · </span>
+              {place.access}
+            </p>
+          ) : null}
+          {place.amenities && place.amenities.length > 0 ? (
+            <ul className="mt-3 flex flex-wrap gap-1.5">
+              {place.amenities.map((a) => (
+                <li
+                  key={a}
+                  className="rounded-full bg-elevated px-2.5 py-1 text-[11px] font-medium text-fg"
+                >
+                  {a}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="font-mono text-[11px] tabular-nums text-muted">{coords(place)}</p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {editable && !editing ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="inline-flex h-9 items-center rounded-sm bg-elevated px-3 text-xs font-medium text-fg"
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                onClick={() => void removePin()}
+                disabled={busy}
+                className="inline-flex h-9 items-center rounded-sm bg-elevated px-3 text-xs font-medium text-danger"
+              >
+                Delete
+              </button>
+            </>
+          ) : null}
+          <button
+            type="button"
+            onClick={onSave}
+            aria-pressed={saved}
+            className={cn(
+              "inline-flex h-9 items-center gap-1.5 rounded-sm px-3 text-xs font-medium",
+              saved ? "bg-accent text-accent-fg" : "bg-elevated text-fg",
+            )}
+          >
+            <Heart className={cn("size-3.5", saved && "fill-current")} />
+            {saved ? "Saved" : "Save"}
+          </button>
+        </div>
       </div>
+      {editError && !editing ? <p className="mt-2 text-sm text-danger">{editError}</p> : null}
     </article>
   );
 }
