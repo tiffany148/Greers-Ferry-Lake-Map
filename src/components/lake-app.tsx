@@ -48,6 +48,7 @@ import { GEOLOGY_DEFAULT_OPACITY } from "@/lib/geology-maps";
 import { HISTORICAL_DEFAULT_OPACITY } from "@/lib/historical-maps";
 import { cn } from "@/lib/utils";
 import { useFavorites } from "@/hooks/use-favorites";
+import { useHiddenPins } from "@/hooks/use-hidden-pins";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LakeMap, type AddPinKind, type MapLayerId } from "@/components/lake-map";
@@ -125,6 +126,7 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
   const [draftError, setDraftError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const favs = useFavorites();
+  const hidden = useHiddenPins();
 
   useEffect(() => setMounted(true), []);
 
@@ -152,7 +154,11 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
     };
   }, [refreshShared]);
 
-  const catalog = useMemo(() => [...PLACES, ...shared], [shared]);
+  const hiddenIds = hidden.ids;
+  const catalog = useMemo(() => {
+    const hiddenSet = new Set(hiddenIds);
+    return [...PLACES, ...shared].filter((p) => !hiddenSet.has(p.id));
+  }, [shared, hiddenIds]);
 
   const filtered = useMemo(() => {
     let list = searchPlaces(query, catalog);
@@ -580,12 +586,29 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
               />
             ) : null}
 
+            {hidden.count > 0 ? (
+              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 text-xs text-muted">
+                <span>{hidden.count} pin{hidden.count === 1 ? "" : "s"} hidden on this device</span>
+                <button
+                  type="button"
+                  className="font-medium text-accent hover:underline"
+                  onClick={() => hidden.clearAll()}
+                >
+                  Restore all
+                </button>
+              </div>
+            ) : null}
+
             {selected ? (
               <PlaceDetail
                 place={selected}
                 saved={favs.has(selected.id)}
                 onSave={() => favs.toggle(selected.id)}
                 onClose={() => setSelectedId(null)}
+                onHide={() => {
+                  hidden.hide(selected.id);
+                  setSelectedId(null);
+                }}
                 onUpdated={(next, previousId) => {
                   setShared((prev) => [next, ...prev.filter((p) => p.id !== previousId && p.id !== next.id)]);
                   setSelectedId(next.id);
@@ -703,6 +726,7 @@ function PlaceDetail({
   saved,
   onSave,
   onClose,
+  onHide,
   onUpdated,
   onDeleted,
 }: {
@@ -710,11 +734,13 @@ function PlaceDetail({
   saved: boolean;
   onSave: () => void;
   onClose: () => void;
+  onHide: () => void;
   onUpdated: (place: Place, previousId: string) => void;
   onDeleted: (id: string) => void;
 }) {
   const Icon = KIND_ICON[place.kind];
   const editable = !!(place.community || place.field);
+  const official = !editable;
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(place.name);
   const [editValue, setEditValue] = useState(place.fieldValue ?? "");
@@ -798,7 +824,7 @@ function PlaceDetail({
 
   async function removePin() {
     if (!editable) return;
-    if (!window.confirm(`Delete “${place.name}”? This removes it for everyone.`)) return;
+    if (!window.confirm(`Delete “${place.name}”? This permanently removes the shared pin.`)) return;
     setBusy(true);
     setEditError(null);
     try {
@@ -938,6 +964,18 @@ function PlaceDetail({
         </>
       )}
 
+      {!editing && official ? (
+        <p className="mt-3 text-xs text-muted">
+          Official map pin — you can hide it on this device. Pins you add yourself can be edited or
+          deleted.
+        </p>
+      ) : null}
+      {!editing && editable ? (
+        <p className="mt-3 text-xs text-muted">
+          Shared pin you (or someone) added — edit or delete it below.
+        </p>
+      ) : null}
+
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="font-mono text-[11px] tabular-nums text-muted">{coords(place)}</p>
         <div className="flex flex-wrap items-center gap-1.5">
@@ -956,9 +994,26 @@ function PlaceDetail({
                 disabled={busy}
                 className="inline-flex h-9 items-center rounded-sm bg-elevated px-3 text-xs font-medium text-danger"
               >
-                Delete
+                Delete pin
               </button>
             </>
+          ) : null}
+          {official && !editing ? (
+            <button
+              type="button"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Remove “${place.name}” from your map? It stays on the shared lake map — only hidden on this device.`,
+                  )
+                ) {
+                  onHide();
+                }
+              }}
+              className="inline-flex h-9 items-center rounded-sm bg-elevated px-3 text-xs font-medium text-danger"
+            >
+              Remove from my map
+            </button>
           ) : null}
           <button
             type="button"
@@ -1194,8 +1249,9 @@ function AboutCard({ onClose }: { onClose: () => void }) {
           Overlays stack: turn on Before the dam (USGS topo ≤1963, including Stark and the old
           roads/railway) and Geology (Macrostrat / USGS bedrock) together — each has its own opacity
           slider. With Geology on, tap the map for rock type, age, and a short explanation
-          (Macrostrat identify). Zoom in for street labels on sat, topo, and Map — they stay above
-          overlays.
+          (Macrostrat identify). Official catalog pins can be hidden on this device; pins you add
+          (cove, depth, temp, hazard, custom) can be edited or deleted. Zoom in for street labels on
+          sat, topo, and Map — they stay above overlays.
         </p>
       </div>
     </div>
