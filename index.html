@@ -34,6 +34,11 @@
     }
     button.tool.on { background: var(--accent); color: #08323c; font-weight: 700; }
     .layers { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; }
+    .overlays { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; }
+    .overlays .label {
+      flex: 0 0 auto; align-self: center; font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em; margin-right: 2px;
+    }
     .sheet {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000;
       height: 42vh; display: flex; flex-direction: column;
@@ -83,11 +88,15 @@
       <button class="tool" id="addPin">Add pin</button>
       <button class="tool" id="toggleSheet">Hide list</button>
     </div>
-    <div class="layers">
-      <button class="tool on" data-layer="streets">Streets</button>
-      <button class="tool" data-layer="sat">Satellite</button>
-      <button class="tool" data-layer="topo">Topo</button>
-      <button class="tool" data-layer="hist">Historical</button>
+    <div class="layers" id="basemap">
+      <button class="tool on" data-base="streets">Streets</button>
+      <button class="tool" data-base="sat">Satellite</button>
+      <button class="tool" data-base="topo">Topo</button>
+    </div>
+    <div class="overlays" id="overlays">
+      <span class="label">Stack</span>
+      <button class="tool" data-overlay="hist" aria-pressed="false">Before the dam</button>
+      <button class="tool" data-overlay="geo" aria-pressed="false">Geology</button>
     </div>
   </header>
   <section class="sheet mid" id="sheet">
@@ -105,7 +114,8 @@
       <div class="list" id="list"></div>
       <p class="note">
         Tap <b>Add pin</b>, then tap the map to name a cove. Pins save on this phone.
-        Historical layer is the classic USGS-style topo (contours / older look).
+        Basemaps (Streets / Satellite / Topo) are exclusive. <b>Before the dam</b> and <b>Geology</b> stack on top and can both stay on.
+        Geology is Macrostrat / USGS bedrock. Before the dam uses USGS topo ≤1963.
         Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
@@ -114,47 +124,179 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     const builtIn = [
-      { name: "Lacey's Narrows Marina", type: "marina", lat: 35.56036, lng: -92.19571, note: "7674 Edgemont Rd. 501-825-6214" },
+      { name: "Unnamed spot (35.5719, -92.2170)", type: "cove", lat: 35.571854, lng: -92.216952, note: "From Greers Ferry Lake cove names map." },
+      { name: "Drip Creek", type: "cove", lat: 35.572575, lng: -92.063734, note: "From lake map data (KML)." },
+      { name: "Brittany Cove", type: "cove", lat: 35.558451, lng: -92.081319, note: "From lake map data (KML)." },
+      { name: "Twin Coves", type: "cove", lat: 35.55878, lng: -92.076148, note: "From lake map data (KML)." },
+      { name: "Kidney Cove", type: "cove", lat: 35.529065, lng: -92.054001, note: "From lake map data (KML)." },
+      { name: "Silver Ridge Peninsula", type: "cove", lat: 35.516682, lng: -92.052897, note: "From lake map data (KML)." },
+      { name: "Tannenbaum", type: "cove", lat: 35.524065, lng: -92.061556, note: "From lake map data (KML)." },
+      { name: "Heber Springs Marina/Heber Rec.", type: "marina", lat: 35.501211, lng: -92.058959, note: "From lake map data (KML)." },
+      { name: "Scout Island", type: "cove", lat: 35.535427, lng: -92.076655, note: "Near Goat Island, north of Eden Isle." },
+      { name: "Goat Island", type: "cove", lat: 35.519176, lng: -92.086056, note: "Island north of Eden Isle Marina." },
+      { name: "Bird Island", type: "cove", lat: 35.528582, lng: -92.024903, note: "Long narrow island, Big Water. Purple martins roost here." },
+      { name: "Eden Isle Marina", type: "marina", lat: 35.501338, lng: -92.095372, note: "10 Yacht Harbor Rd. 501-362-2232" },
+      { name: "Eden Isle", type: "cove", lat: 35.505689, lng: -92.102956, note: "From lake map data (KML)." },
+      { name: "Lake Eden", type: "cove", lat: 35.499082, lng: -92.10374, note: "From lake map data (KML)." },
+      { name: "Big Dike", type: "cove", lat: 35.476262, lng: -92.08944, note: "From lake map data (KML)." },
+      { name: "Little Dike", type: "cove", lat: 35.491561, lng: -92.062678, note: "From lake map data (KML)." },
+      { name: "Old Road", type: "cove", lat: 35.498946, lng: -92.102843, note: "From lake map data (KML)." },
+      { name: "Miller's Point", type: "cove", lat: 35.510669, lng: -92.134681, note: "From lake map data (KML)." },
+      { name: "Diamond Bluff", type: "cove", lat: 35.516069, lng: -92.190839, note: "From lake map data (KML)." },
+      { name: "Salt Creek", type: "cove", lat: 35.523876, lng: -92.209812, note: "From lake map data (KML)." },
+      { name: "Tortoise Bay", type: "cove", lat: 35.538393, lng: -92.213294, note: "From lake map data (KML)." },
+      { name: "Parker Island", type: "park", lat: 35.537814, lng: -92.205221, note: "From lake map data (KML)." },
+      { name: "Bondair", type: "cove", lat: 35.538902, lng: -92.182669, note: "From lake map data (KML)." },
+      { name: "Shiloh Marina", type: "marina", lat: 35.539241, lng: -92.146164, note: "Slips, fuel, rentals." },
+      { name: "Puddin' Ridge", type: "cove", lat: 35.543227, lng: -92.114992, note: "From lake map data (KML)." },
+      { name: "Hurricane Bay", type: "cove", lat: 35.549944, lng: -92.177319, note: "From lake map data (KML)." },
+      { name: "Lacey's Narrows Marina", type: "marina", lat: 35.559644, lng: -92.19424, note: "7674 Edgemont Rd. 501-825-6214" },
+      { name: "The Narrows/Main Channel", type: "cove", lat: 35.551077, lng: -92.186995, note: "From lake map data (KML)." },
+      { name: "Lake Ice Rd.", type: "cove", lat: 35.539431, lng: -92.207449, note: "From lake map data (KML)." },
+      { name: "Poker Hill", type: "cove", lat: 35.578382, lng: -92.202442, note: "From lake map data (KML)." },
+      { name: "Higden Bay", type: "cove", lat: 35.571769, lng: -92.213835, note: "From lake map data (KML)." },
+      { name: "Mill Creek", type: "cove", lat: 35.582677, lng: -92.219186, note: "From lake map data (KML)." },
+      { name: "Five Fingers", type: "cove", lat: 35.588646, lng: -92.228181, note: "From lake map data (KML)." },
+      { name: "Mystic Isle", type: "cove", lat: 35.606547, lng: -92.173129, note: "From lake map data (KML)." },
+      { name: "Jansen's Lakefront Restaurant", type: "cove", lat: 35.602316, lng: -92.187217, note: "From lake map data (KML)." },
+      { name: "Middle Fork", type: "cove", lat: 35.614166, lng: -92.194603, note: "From lake map data (KML)." },
+      { name: "Skypoint", type: "cove", lat: 35.604237, lng: -92.140621, note: "From lake map data (KML)." },
+      { name: "Midway Bluffs", type: "cove", lat: 35.607176, lng: -92.126071, note: "From lake map data (KML)." },
+      { name: "Hill Creek Marina", type: "marina", lat: 35.607768, lng: -92.149141, note: "North shore marina." },
+      { name: "Shirley", type: "cove", lat: 35.65542, lng: -92.32029, note: "From lake map data (KML)." },
+      { name: "Wild Goose Creek", type: "cove", lat: 35.656606, lng: -92.219716, note: "From lake map data (KML)." },
+      { name: "Birdie Hollow", type: "cove", lat: 35.643879, lng: -92.221298, note: "From lake map data (KML)." },
+      { name: "Brewer", type: "cove", lat: 35.622387, lng: -92.209168, note: "From lake map data (KML)." },
+      { name: "Shop Hollow", type: "cove", lat: 35.626688, lng: -92.19332, note: "From lake map data (KML)." },
+      { name: "Brush Creek", type: "cove", lat: 35.626015, lng: -92.187439, note: "From lake map data (KML)." },
+      { name: "Stewart Hollow", type: "cove", lat: 35.624008, lng: -92.212588, note: "From lake map data (KML)." },
+      { name: "Punchin Hollow", type: "cove", lat: 35.641238, lng: -92.215344, note: "From lake map data (KML)." },
+      { name: "Sandiff River", type: "cove", lat: 35.65044, lng: -92.225923, note: "From lake map data (KML)." },
+      { name: "Indian Creek", type: "cove", lat: 35.665245, lng: -92.254764, note: "From lake map data (KML)." },
+      { name: "Greenbrier Creek", type: "cove", lat: 35.666634, lng: -92.2615, note: "From lake map data (KML)." },
+      { name: "Ship Branch", type: "cove", lat: 35.665974, lng: -92.267352, note: "From lake map data (KML)." },
+      { name: "Weaver Creek", type: "cove", lat: 35.644808, lng: -92.301008, note: "From lake map data (KML)." },
+      { name: "Hump Hollow", type: "cove", lat: 35.644036, lng: -92.297064, note: "From lake map data (KML)." },
+      { name: "Big Branch", type: "cove", lat: 35.646104, lng: -92.334988, note: "From lake map data (KML)." },
+      { name: "Harper's Cove", type: "cove", lat: 35.552269, lng: -92.361566, note: "From lake map data (KML)." },
+      { name: "Dave Creek", type: "cove", lat: 35.586335, lng: -92.266565, note: "From lake map data (KML)." },
+      { name: "Hooten Hollow", type: "cove", lat: 35.576702, lng: -92.250954, note: "From lake map data (KML)." },
+      { name: "Grand Isle", type: "cove", lat: 35.578388, lng: -92.237088, note: "From lake map data (KML)." },
+      { name: "Lynn Creek", type: "cove", lat: 35.58301, lng: -92.289688, note: "From lake map data (KML)." },
+      { name: "Enchanted Peninsula", type: "cove", lat: 35.57754, lng: -92.247412, note: "From lake map data (KML)." },
+      { name: "Snakehead Cove", type: "cove", lat: 35.5749, lng: -92.283759, note: "From lake map data (KML)." },
+      { name: "Fairfield Bay Marina", type: "marina", lat: 35.566796, lng: -92.297438, note: "4350 AR 330 S. 501-884-6030" },
+      { name: "Boat Ridge Island", type: "cove", lat: 35.553687, lng: -92.315971, note: "From lake map data (KML)." },
+      { name: "Green Creek", type: "cove", lat: 35.556865, lng: -92.317727, note: "From lake map data (KML)." },
+      { name: "Party Cove", type: "cove", lat: 35.5605, lng: -92.332248, note: "From lake map data (KML)." },
+      { name: "Thompson Creek", type: "cove", lat: 35.562339, lng: -92.335217, note: "From lake map data (KML)." },
+      { name: "South Fork", type: "cove", lat: 35.554396, lng: -92.323664, note: "From lake map data (KML)." },
+      { name: "Peter Rock Point", type: "cove", lat: 35.545109, lng: -92.357545, note: "From lake map data (KML)." },
+      { name: "South Fork River", type: "cove", lat: 35.564818, lng: -92.37541, note: "From lake map data (KML)." },
+      { name: "Archey Creek", type: "cove", lat: 35.590336, lng: -92.446911, note: "From lake map data (KML)." },
+      { name: "Pee Dee Creek", type: "cove", lat: 35.591895, lng: -92.413845, note: "From lake map data (KML)." },
+      { name: "Choctaw Creek", type: "cove", lat: 35.531929, lng: -92.363545, note: "From lake map data (KML)." },
+      { name: "Choctaw Marina", type: "marina", lat: 35.531265, lng: -92.38321, note: "From lake map data (KML)." },
+      { name: "Emerald Isle", type: "cove", lat: 35.552498, lng: -92.335119, note: "From lake map data (KML)." },
+      { name: "Eglantine", type: "cove", lat: 35.562269, lng: -92.309703, note: "From lake map data (KML)." },
+      { name: "Quiet Cove", type: "cove", lat: 35.562445, lng: -92.318539, note: "From lake map data (KML)." },
+      { name: "Steven's Point", type: "cove", lat: 35.544029, lng: -92.312428, note: "From lake map data (KML)." },
+      { name: "Bailey Hollow", type: "cove", lat: 35.546969, lng: -92.307948, note: "From lake map data (KML)." },
+      { name: "Banker's Cove", type: "cove", lat: 35.543166, lng: -92.307636, note: "From lake map data (KML)." },
+      { name: "Tee Pee Cove", type: "cove", lat: 35.575136, lng: -92.27929, note: "From lake map data (KML)." },
+      { name: "Lakeshore Dr.", type: "cove", lat: 35.581062, lng: -92.260998, note: "From lake map data (KML)." },
+      { name: "Kinderhook", type: "cove", lat: 35.595971, lng: -92.206855, note: "From lake map data (KML)." },
+      { name: "Eva Turney Hollow", type: "cove", lat: 35.597265, lng: -92.210408, note: "From lake map data (KML)." },
+      { name: "Edgewater", type: "cove", lat: 35.59721, lng: -92.201389, note: "From lake map data (KML)." },
+      { name: "Old Train Bridge", type: "cove", lat: 35.602366, lng: -92.188046, note: "From lake map data (KML)." },
+      { name: "Salt Cave", type: "cove", lat: 35.593215, lng: -92.171948, note: "From lake map data (KML)." },
+      { name: "Davidson Circle", type: "cove", lat: 35.601395, lng: -92.148001, note: "From lake map data (KML)." },
+      { name: "Launch Ramp Rd.", type: "ramp", lat: 35.592518, lng: -92.163329, note: "From lake map data (KML)." },
+      { name: "Sylvan Shores", type: "cove", lat: 35.605128, lng: -92.13587, note: "From lake map data (KML)." },
+      { name: "OId Sunny Slope Rd.", type: "cove", lat: 35.607802, lng: -92.126389, note: "From lake map data (KML)." },
+      { name: "Midway Bridge", type: "cove", lat: 35.606765, lng: -92.12823, note: "From lake map data (KML)." },
+      { name: "Devil's Bluff", type: "cove", lat: 35.605605, lng: -92.12794, note: "From lake map data (KML)." },
+      { name: "Little Goat Island", type: "cove", lat: 35.614405, lng: -92.097768, note: "Smaller island west of Goat Island." },
+      { name: "Frontier Canyon", type: "cove", lat: 35.61872, lng: -92.085286, note: "From lake map data (KML)." },
+      { name: "Wildcat Hollow", type: "cove", lat: 35.621324, lng: -92.096293, note: "From lake map data (KML)." },
+      { name: "Prim Rd. Hwy. 263", type: "cove", lat: 35.633168, lng: -92.053026, note: "From lake map data (KML)." },
+      { name: "Beech Fork", type: "cove", lat: 35.658116, lng: -92.015646, note: "From lake map data (KML)." },
+      { name: "Cedar Creek", type: "cove", lat: 35.653289, lng: -91.998734, note: "From lake map data (KML)." },
+      { name: "Yellow Branch", type: "cove", lat: 35.640439, lng: -92.030276, note: "From lake map data (KML)." },
+      { name: "Everett Ridge", type: "cove", lat: 35.681346, lng: -92.055548, note: "From lake map data (KML)." },
+      { name: "Bear Hollow", type: "cove", lat: 35.685124, lng: -92.056908, note: "From lake map data (KML)." },
+      { name: "Turkey Creek", type: "cove", lat: 35.662339, lng: -92.031966, note: "From lake map data (KML)." },
+      { name: "Tick Creek", type: "cove", lat: 35.734632, lng: -92.295749, note: "From lake map data (KML)." },
+      { name: "Porter Hollow", type: "cove", lat: 35.73263, lng: -92.294619, note: "From lake map data (KML)." },
+      { name: "Little Wild Goose Creek", type: "cove", lat: 35.674789, lng: -92.234011, note: "From lake map data (KML)." },
+      { name: "Backbone Ridge", type: "cove", lat: 35.682405, lng: -92.229601, note: "From lake map data (KML)." },
+      { name: "Hill Creek", type: "cove", lat: 35.635613, lng: -92.155114, note: "From lake map data (KML)." },
+      { name: "Bird Hollow", type: "cove", lat: 35.615545, lng: -92.197936, note: "From lake map data (KML)." },
+      { name: "Tumbling Shoals", type: "cove", lat: 35.541467, lng: -91.967687, note: "From lake map data (KML)." },
+      { name: "John F. Kennedy Overlook", type: "park", lat: 35.520229, lng: -91.992256, note: "From lake map data (KML)." },
+      { name: "Dam", type: "cove", lat: 35.521293, lng: -91.994387, note: "From lake map data (KML)." },
+      { name: "Big Lake", type: "cove", lat: 35.525788, lng: -91.991204, note: "From lake map data (KML)." },
+      { name: "Wackley Hollow", type: "cove", lat: 35.529761, lng: -91.987937, note: "From lake map data (KML)." },
+      { name: "Robinson Hollow", type: "cove", lat: 35.533969, lng: -91.995795, note: "From lake map data (KML)." },
+      { name: "Asphalt Beach", type: "swim", lat: 35.527847, lng: -92.012608, note: "From lake map data (KML)." },
+      { name: "US Army Corps of Engineers", type: "cove", lat: 35.521815, lng: -91.999412, note: "From lake map data (KML)." },
+      { name: "Little Red River", type: "cove", lat: 35.51819, lng: -91.995799, note: "From lake map data (KML)." },
+      { name: "Old Hwy 25 Park Beach", type: "swim", lat: 35.5342, lng: -92.015465, note: "From lake map data (KML)." },
+      { name: "Damsite Marina", type: "marina", lat: 35.529991, lng: -92.009381, note: "From lake map data (KML)." },
+      { name: "Sugar Loaf Mountain", type: "cove", lat: 35.56403, lng: -92.265491, note: "Island mountain. Boat-access hiking trail." },
+      { name: "Sugar Loaf Marina", type: "marina", lat: 35.546783, lng: -92.27443, note: "From lake map data (KML)." },
+      { name: "Peter Creek", type: "cove", lat: 35.56285, lng: -91.977983, note: "From lake map data (KML)." },
+      { name: "Copperas Spring Hollow", type: "cove", lat: 35.549816, lng: -92.024945, note: "From lake map data (KML)." },
+      { name: "Little Peter Creek", type: "cove", lat: 35.56502, lng: -92.015573, note: "From lake map data (KML)." },
+      { name: "Cherokee Park", type: "park", lat: 35.552298, lng: -92.077528, note: "475 Cherokee Park Rd." },
+      { name: "Dug Hill Rd.", type: "cove", lat: 35.55346, lng: -92.017961, note: "From lake map data (KML)." },
+      { name: "Collinâs Creek", type: "cove", lat: 35.514068, lng: -91.991271, note: "From lake map data (KML)." },
+      { name: "Cow Shoals", type: "cove", lat: 35.513478, lng: -91.938331, note: "From lake map data (KML)." },
+      { name: "Taylor Island", type: "cove", lat: 35.535549, lng: -92.126674, note: "From lake map data (KML)." },
+      { name: "Prior Mountain", type: "cove", lat: 35.491686, lng: -92.231959, note: "From lake map data (KML)." },
+      { name: "North Fork Cadron Creek", type: "cove", lat: 35.489197, lng: -92.228545, note: "From lake map data (KML)." },
+      { name: "Sugarloaf Mountain/The Lookout", type: "cove", lat: 35.490733, lng: -91.985694, note: "From lake map data (KML)." },
+      { name: "Rocky Top Falls", type: "cove", lat: 35.581407, lng: -92.288113, note: "From lake map data (KML)." },
+      { name: "Bridal Veil Falls", type: "cove", lat: 35.469208, lng: -92.038497, note: "From lake map data (KML)." },
+      { name: "Sandy Beach", type: "swim", lat: 35.498913, lng: -92.056421, note: "From lake map data (KML)." },
+      { name: "Pebble Beach", type: "swim", lat: 35.492345, lng: -92.054395, note: "From lake map data (KML)." },
+      { name: "Cove Creek", type: "cove", lat: 35.471211, lng: -92.144418, note: "From lake map data (KML)." },
+      { name: "Devil's Fork", type: "cove", lat: 35.590761, lng: -92.17961, note: "From lake map data (KML)." },
+      { name: "Narrows Launch", type: "ramp", lat: 35.563314, lng: -92.196252, note: "From lake map data (KML)." },
+      { name: "Devil's Fork Launch", type: "ramp", lat: 35.591872, lng: -92.18013, note: "From lake map data (KML)." },
+      { name: "Hill Creek Boat Ramp", type: "ramp", lat: 35.608461, lng: -92.146541, note: "From lake map data (KML)." },
+      { name: "Cove Creek Boat Launch", type: "ramp", lat: 35.464858, lng: -92.153024, note: "From lake map data (KML)." },
+      { name: "Mastercraft Alley", type: "cove", lat: 35.620144, lng: -92.190136, note: "From lake map data (KML)." },
+      { name: "Fairfield Bay Bluffs/Cliffs", type: "cove", lat: 35.573353, lng: -92.280515, note: "From lake map data (KML)." },
+      { name: "Budd Creek", type: "cove", lat: 35.55657, lng: -92.121844, note: "From lake map data (KML)." },
       { name: "Narrows Park", type: "park", lat: 35.56397, lng: -92.19821, note: "7699 Edgemont Rd. Camp + ramp + marina." },
       { name: "Narrows Park Ramp", type: "ramp", lat: 35.5618, lng: -92.1969, note: "Corps launch at the Narrows bridge." },
       { name: "The Narrows", type: "cove", lat: 35.5582, lng: -92.1935, note: "Gorge connecting upper and lower lake." },
-      { name: "Shiloh Marina", type: "marina", lat: 35.53925, lng: -92.14626, note: "Slips, fuel, rentals." },
       { name: "Shiloh Park", type: "park", lat: 35.53758, lng: -92.14599, note: "Campground, marina, swim beach." },
       { name: "Heber Springs Marina", type: "marina", lat: 35.50202, lng: -92.05932, note: "99 Park Rd. 501-362-8838" },
-      { name: "Heber Springs Park", type: "park", lat: 35.50400, lng: -92.06650, note: "89 Park Rd. Ramp + swim beach." },
-      { name: "Heber Springs Park Ramp", type: "ramp", lat: 35.50320, lng: -92.06380, note: "Public launch." },
-      { name: "Heber Springs Swim Beach", type: "swim", lat: 35.50240, lng: -92.06820, note: "No pets in day-use swim beaches." },
-      { name: "Eden Isle Marina", type: "marina", lat: 35.50590, lng: -92.09570, note: "10 Yacht Harbor Rd. 501-362-2232" },
-      { name: "Goat Island", type: "cove", lat: 35.51869, lng: -92.08598, note: "Island north of Eden Isle Marina." },
-      { name: "Scout Island", type: "cove", lat: 35.52280, lng: -92.08120, note: "Near Goat Island, north of Eden Isle." },
-      { name: "Little Goat Island", type: "cove", lat: 35.52850, lng: -92.09080, note: "Smaller island west of Goat Island." },
-      { name: "Bird Island", type: "cove", lat: 35.51280, lng: -92.11250, note: "Long narrow island, Big Water. Purple martins roost here." },
-      { name: "Millers Point", type: "cove", lat: 35.51008, lng: -92.13765, note: "Point on the lower lake." },
+      { name: "Heber Springs Park", type: "park", lat: 35.504, lng: -92.0665, note: "89 Park Rd. Ramp + swim beach." },
+      { name: "Heber Springs Park Ramp", type: "ramp", lat: 35.5032, lng: -92.0638, note: "Public launch." },
+      { name: "Heber Springs Swim Beach", type: "swim", lat: 35.5024, lng: -92.0682, note: "No pets in day-use swim beaches." },
       { name: "Goff Point", type: "cove", lat: 35.47647, lng: -92.16071, note: "South-shore point." },
-      { name: "Dam Site Marina", type: "marina", lat: 35.52950, lng: -92.00760, note: "501-362-2333" },
-      { name: "Dam Site Park", type: "park", lat: 35.52200, lng: -91.99760, note: "315 Heber Springs Rd N." },
-      { name: "Dam Site Ramp", type: "ramp", lat: 35.52420, lng: -92.00480, note: "Launch near the dam." },
-      { name: "Greers Ferry Dam", type: "park", lat: 35.52091, lng: -91.99320, note: "Dam and Little Red tailwater." },
-      { name: "William Carl Garner Visitor Center", type: "park", lat: 35.52150, lng: -91.99940, note: "700 Heber Springs Rd N." },
+      { name: "Dam Site Park", type: "park", lat: 35.522, lng: -91.9976, note: "315 Heber Springs Rd N." },
+      { name: "Dam Site Ramp", type: "ramp", lat: 35.5242, lng: -92.0048, note: "Launch near the dam." },
+      { name: "Greers Ferry Dam", type: "park", lat: 35.52091, lng: -91.9932, note: "Dam and Little Red tailwater." },
+      { name: "William Carl Garner Visitor Center", type: "park", lat: 35.5215, lng: -91.9994, note: "700 Heber Springs Rd N." },
       { name: "John F. Kennedy Park", type: "park", lat: 35.51321, lng: -91.99684, note: "375 Hatchery Rd." },
-      { name: "John F. Kennedy Ramp", type: "ramp", lat: 35.51480, lng: -91.99520, note: "Near hatchery / tailwater." },
+      { name: "John F. Kennedy Ramp", type: "ramp", lat: 35.5148, lng: -91.9952, note: "Near hatchery / tailwater." },
       { name: "Old Highway 25 Park", type: "park", lat: 35.53946, lng: -92.01313, note: "Tumbling Shoals. Camp + swim + ramp." },
-      { name: "Cherokee Park", type: "park", lat: 35.55737, lng: -92.07674, note: "475 Cherokee Park Rd." },
-      { name: "Cherokee Park Ramp", type: "ramp", lat: 35.55620, lng: -92.07890, note: "NE lower lake launch." },
+      { name: "Cherokee Park Ramp", type: "ramp", lat: 35.5562, lng: -92.0789, note: "NE lower lake launch." },
       { name: "Devils Fork Park", type: "park", lat: 35.58463, lng: -92.17853, note: "73 Devils Fork Rd." },
-      { name: "Devils Fork Ramp", type: "ramp", lat: 35.58320, lng: -92.18080, note: "Multi-lane ramp." },
+      { name: "Devils Fork Ramp", type: "ramp", lat: 35.5832, lng: -92.1808, note: "Multi-lane ramp." },
       { name: "Mill Creek Park", type: "park", lat: 35.58286, lng: -92.21821, note: "West of Greers Ferry." },
       { name: "Hill Creek Park", type: "park", lat: 35.61091, lng: -92.14932, note: "474 Hill Creek Rd, Edgemont." },
-      { name: "Hill Creek Marina", type: "marina", lat: 35.60897, lng: -92.14849, note: "North shore marina." },
-      { name: "Poker Hill Island", type: "cove", lat: 35.57841, lng: -92.20210, note: "Island near the Narrows / Higden." },
+      { name: "Poker Hill Island", type: "cove", lat: 35.57841, lng: -92.2021, note: "Island near the Narrows / Higden." },
       { name: "Higden (old town area)", type: "cove", lat: 35.57341, lng: -92.20321, note: "Town at the Narrows; parts of old Higden were flooded in 1962." },
       { name: "Sugar Loaf Park", type: "park", lat: 35.54261, lng: -92.27057, note: "1389 Resort Rd, Higden." },
-      { name: "Sugar Loaf Mountain", type: "cove", lat: 35.56119, lng: -92.26627, note: "Island mountain. Boat-access hiking trail." },
-      { name: "Five Fingers / Fairfield Bay", type: "cove", lat: 35.60500, lng: -92.27000, note: "North / Five Fingers arms of the upper lake." },
-      { name: "Fairfield Bay Marina", type: "marina", lat: 35.59890, lng: -92.26840, note: "4350 AR 330 S. 501-884-6030" },
+      { name: "Five Fingers / Fairfield Bay", type: "cove", lat: 35.605, lng: -92.27, note: "North / Five Fingers arms of the upper lake." },
       { name: "Choctaw Park", type: "park", lat: 35.53286, lng: -92.38043, note: "3848 Hwy 330 E, Clinton." },
-      { name: "Choctaw / Furgerson's Marina", type: "marina", lat: 35.53380, lng: -92.37820, note: "501-745-2666" },
-      { name: "Cove Creek Park", type: "park", lat: 35.46177, lng: -92.15386, note: "South end of the lower lake." }
+      { name: "Choctaw / Furgerson's Marina", type: "marina", lat: 35.5338, lng: -92.3782, note: "501-745-2666" },
+      { name: "Cove Creek Park", type: "park", lat: 35.46177, lng: -92.15386, note: "South end of the lower lake." },
     ];
 
     const colors = { marina: "#3db8ff", ramp: "#7ed07a", park: "#e8c56b", swim: "#79b8ff", cove: "#d4a0ff", mine: "#ff8bd2" };
@@ -162,22 +304,103 @@
     const loadMine = () => { try { return JSON.parse(localStorage.getItem(STORE) || "[]"); } catch { return []; } };
     const saveMine = (arr) => localStorage.setItem(STORE, JSON.stringify(arr));
 
+    const HIST_SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer";
+    const HIST_MOSAIC = {
+      mosaicMethod: "esriMosaicAttribute",
+      mosaicOperation: "MT_FIRST",
+      where: "DateCurrent <= 1963 AND (Map_Scale <= 62500 OR Imprint_Year >= 1930)",
+      sortField: "Map_Scale",
+      sortValue: "24000",
+      ascending: true
+    };
+    const WEB_MERCATOR_HALF = 20037508.342789244;
+    function historicalTileUrl(coords) {
+      const z = coords.z, x = coords.x, y = coords.y, tileSize = 256;
+      const n = Math.pow(2, z);
+      const size = (2 * WEB_MERCATOR_HALF) / n;
+      const xmin = -WEB_MERCATOR_HALF + x * size;
+      const ymax = WEB_MERCATOR_HALF - y * size;
+      const xmax = xmin + size;
+      const ymin = ymax - size;
+      const mosaicRule = encodeURIComponent(JSON.stringify(HIST_MOSAIC));
+      return HIST_SERVER + "/exportImage"
+        + "?bbox=" + xmin + "," + ymin + "," + xmax + "," + ymax
+        + "&bboxSR=3857&imageSR=3857&size=" + tileSize + "," + tileSize
+        + "&format=png&interpolation=RSP_BilinearInterpolation"
+        + "&mosaicRule=" + mosaicRule + "&f=image";
+    }
+
     const map = L.map("map", { zoomControl: true }).setView([35.53, -92.17], 11);
-    const layers = {
+    map.createPane("historical");
+    map.getPane("historical").style.zIndex = 350;
+    map.createPane("geology");
+    map.getPane("geology").style.zIndex = 360;
+    map.createPane("labels");
+    map.getPane("labels").style.zIndex = 450;
+
+    const basemaps = {
       streets: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }),
       sat: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Esri" }),
-      topo: L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, attribution: "USGS" }),
-      hist: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}", { maxZoom: 15, attribution: "Esri / USGS historic topo style" })
+      topo: L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, attribution: "USGS" })
     };
-    let currentLayer = layers.streets.addTo(map);
+    const labelLayer = L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, pane: "labels", opacity: 0.95, attribution: "Esri labels" }
+    );
+    const streetLabelLayer = L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, minZoom: 13, pane: "labels", opacity: 0.9, attribution: "Esri" }
+    );
 
-    document.querySelector(".layers").addEventListener("click", (e) => {
-      const btn = e.target.closest("[data-layer]");
+    const histLayer = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", {
+      maxZoom: 15, opacity: 0.78, pane: "historical", attribution: "USGS Historical Topographic Maps"
+    });
+    histLayer.getTileUrl = function (coords) { return historicalTileUrl(coords); };
+
+    const geoLayer = L.tileLayer("https://tiles.macrostrat.org/carto/{z}/{x}/{y}.png", {
+      maxZoom: 18, opacity: 0.55, pane: "geology", attribution: "Geology © Macrostrat / USGS"
+    });
+
+    let currentBase = basemaps.streets.addTo(map);
+    let histOn = false;
+    let geoOn = false;
+
+    function syncLabels() {
+      const want = currentBase !== basemaps.streets;
+      if (want) {
+        if (!map.hasLayer(labelLayer)) labelLayer.addTo(map);
+        if (!map.hasLayer(streetLabelLayer)) streetLabelLayer.addTo(map);
+      } else {
+        if (map.hasLayer(labelLayer)) map.removeLayer(labelLayer);
+        if (map.hasLayer(streetLabelLayer)) map.removeLayer(streetLabelLayer);
+      }
+    }
+
+    document.getElementById("basemap").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-base]");
       if (!btn) return;
-      document.querySelectorAll(".layers .tool").forEach((b) => b.classList.remove("on"));
+      document.querySelectorAll("#basemap .tool").forEach((b) => b.classList.remove("on"));
       btn.classList.add("on");
-      map.removeLayer(currentLayer);
-      currentLayer = layers[btn.dataset.layer].addTo(map);
+      map.removeLayer(currentBase);
+      currentBase = basemaps[btn.dataset.base].addTo(map);
+      syncLabels();
+    });
+
+    document.getElementById("overlays").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-overlay]");
+      if (!btn) return;
+      const id = btn.dataset.overlay;
+      if (id === "hist") {
+        histOn = !histOn;
+        btn.classList.toggle("on", histOn);
+        btn.setAttribute("aria-pressed", histOn ? "true" : "false");
+        if (histOn) histLayer.addTo(map); else map.removeLayer(histLayer);
+      } else if (id === "geo") {
+        geoOn = !geoOn;
+        btn.classList.toggle("on", geoOn);
+        btn.setAttribute("aria-pressed", geoOn ? "true" : "false");
+        if (geoOn) geoLayer.addTo(map); else map.removeLayer(geoLayer);
+      }
     });
 
     let mine = loadMine();
@@ -192,7 +415,7 @@
     function addMarker(p) {
       const color = colors[p.type] || colors.cove;
       const m = L.circleMarker([p.lat, p.lng], {
-        radius: p.custom ? 9 : 7, color: "#08323c", weight: 1, fillColor: color, fillOpacity: 0.95
+        radius: p.custom ? 9 : 6, color: "#08323c", weight: 1, fillColor: color, fillOpacity: 0.95
       }).addTo(map);
       const extra = p.custom ? `<br><button type="button" onclick="window._delPin('${p.id}')">Delete my pin</button>` : "";
       m.bindPopup(`<strong>${p.name}</strong><br>${p.note || ""}<br><a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>${extra}`);
@@ -215,7 +438,7 @@
             <a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Apple Maps</a>
           </div>
           <div class="actions">
-            <button data-go="${p.name}">Show</button>
+            <button data-go="${p.name.replace(/"/g, "&quot;")}">Show</button>
             ${p.custom ? `<button data-del="${p.id}">Delete</button>` : ""}
           </div>`;
         list.appendChild(el);
