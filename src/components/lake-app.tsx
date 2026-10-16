@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertTriangle,
   Anchor,
+  Download,
   Droplets,
   Heart,
   History,
@@ -15,6 +16,7 @@ import {
   Search,
   Thermometer,
   Trees,
+  Upload,
   Waves,
   X,
 } from "lucide-react";
@@ -44,11 +46,20 @@ import {
   updateFieldPin,
   type FieldPinKind,
 } from "@/lib/field-pins";
+import {
+  buildPersonalExport,
+  newPersonalId,
+  parsePersonalImport,
+  personalPinToPlace,
+  type PersonalPin,
+  type PersonalPinKind,
+} from "@/lib/personal-pins";
 import { GEOLOGY_DEFAULT_OPACITY } from "@/lib/geology-maps";
 import { HISTORICAL_DEFAULT_OPACITY } from "@/lib/historical-maps";
 import { cn } from "@/lib/utils";
 import { useFavorites } from "@/hooks/use-favorites";
 import { useHiddenPins } from "@/hooks/use-hidden-pins";
+import { usePersonalPins } from "@/hooks/use-personal-pins";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LakeMap, type AddPinKind, type MapLayerId } from "@/components/lake-map";
@@ -77,10 +88,10 @@ const ADD_OPTIONS: {
   { kind: "depth", label: "Water depth", hint: "Sounding in feet", Icon: Droplets },
   { kind: "temperature", label: "Temperature", hint: "Surface °F", Icon: Thermometer },
   { kind: "hazard", label: "Hazard", hint: "Stump, rock, shoal…", Icon: AlertTriangle },
-  { kind: "pin", label: "Custom pin", hint: "Any shared mark", Icon: MapPin },
+  { kind: "pin", label: "Custom pin", hint: "Mark on your map", Icon: MapPin },
 ];
 
-type KindFilter = "all" | "saved" | "community" | "field" | PlaceKind;
+type KindFilter = "all" | "saved" | "mine" | "community" | "field" | PlaceKind;
 type RegionFilter = "all" | RegionId;
 
 function coords(place: Place) {
@@ -127,12 +138,15 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
   const [saving, setSaving] = useState(false);
   const favs = useFavorites();
   const hidden = useHiddenPins();
+  const personal = usePersonalPins();
+  const importRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => setMounted(true), []);
 
   const refreshShared = useCallback(async () => {
     try {
       const [coves, pins] = await Promise.all([listCommunityCoves(), listFieldPins()]);
+      // Shared list only — never clears or replaces personal pins in localStorage.
       setShared([...coves.map(communityCoveToPlace), ...pins.map(fieldPinToPlace)]);
     } catch {
       /* preview may still be migrating */
@@ -155,14 +169,25 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
   }, [refreshShared]);
 
   const hiddenIds = hidden.ids;
+  const personalPins = personal.pins;
+  const myMapOnly = personal.myMapOnly;
+
   const catalog = useMemo(() => {
     const hiddenSet = new Set(hiddenIds);
-    return [...PLACES, ...shared].filter((p) => !hiddenSet.has(p.id));
-  }, [shared, hiddenIds]);
+    const minePlaces = personalPins.map(personalPinToPlace);
+    const mineSharedIds = new Set(
+      personalPins.map((p) => p.sharedId).filter((id): id is string => !!id),
+    );
+    const sharedVisible = myMapOnly
+      ? []
+      : shared.filter((p) => !mineSharedIds.has(p.id));
+    return [...PLACES, ...minePlaces, ...sharedVisible].filter((p) => !hiddenSet.has(p.id));
+  }, [shared, hiddenIds, personalPins, myMapOnly]);
 
   const filtered = useMemo(() => {
     let list = searchPlaces(query, catalog);
     if (kind === "saved") list = list.filter((p) => favs.has(p.id));
+    else if (kind === "mine") list = list.filter((p) => p.mine);
     else if (kind === "community") list = list.filter((p) => p.community);
     else if (kind === "field") list = list.filter((p) => p.field);
     else if (kind !== "all") list = list.filter((p) => p.kind === kind);
@@ -205,49 +230,76 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
 
   async function submitAdd() {
     if (!draftPoint) return;
+    const name = (draftName || draftValue || "My pin").trim();
+    if (!name && addKind !== "depth" && addKind !== "temperature") {
+      setDraftError("Give this pin a name.");
+      return;
+    }
     setSaving(true);
     setDraftError(null);
+    const now = Date.now();
+    // Write device-local first so the pin survives even if the shared post fails.
+    const local: PersonalPin = {
+      id: newPersonalId(),
+      kind: addKind as PersonalPinKind,
+      name: (draftName || draftValue || "My pin").trim().slice(0, 80),
+      lat: draftPoint.lat,
+      lon: draftPoint.lon,
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (draftValue.trim()) local.value = draftValue.trim().slice(0, 40);
+    if (draftNote.trim()) local.note = draftNote.trim().slice(0, 280);
+
     try {
       if (addKind === "cove") {
-        const result = await addCommunityCove({
-          data: {
-            name: draftName,
-            lat: draftPoint.lat,
-            lon: draftPoint.lon,
-            note: draftNote || undefined,
-          },
-        });
-        if (!result.ok) {
-          setDraftError(result.error);
-          return;
+        personal.upsert(local);
+        try {
+          const result = await addCommunityCove({
+            data: {
+              name: local.name,
+              lat: local.lat,
+              lon: local.lon,
+              note: local.note,
+            },
+          });
+          if (result.ok) {
+            const place = communityCoveToPlace(result.cove);
+            personal.upsert({ ...local, sharedId: place.id, updatedAt: Date.now() });
+            setShared((prev) => [place, ...prev.filter((p) => p.id !== place.id)]);
+          }
+        } catch {
+          /* keep local pin */
         }
-        const place = communityCoveToPlace(result.cove);
-        setShared((prev) => [place, ...prev.filter((p) => p.id !== place.id)]);
         cancelAdd();
         setKind("all");
-        selectPlace(place.id, true);
+        selectPlace(local.id, true);
         return;
       }
 
-      const result = await addFieldPin({
-        data: {
-          kind: addKind as FieldPinKind,
-          title: draftName || draftValue,
-          value: draftValue || undefined,
-          lat: draftPoint.lat,
-          lon: draftPoint.lon,
-          note: draftNote || undefined,
-        },
-      });
-      if (!result.ok) {
-        setDraftError(result.error);
-        return;
+      personal.upsert(local);
+      try {
+        const result = await addFieldPin({
+          data: {
+            kind: addKind as FieldPinKind,
+            title: local.name,
+            value: local.value,
+            lat: local.lat,
+            lon: local.lon,
+            note: local.note,
+          },
+        });
+        if (result.ok) {
+          const place = fieldPinToPlace(result.pin);
+          personal.upsert({ ...local, sharedId: place.id, updatedAt: Date.now() });
+          setShared((prev) => [place, ...prev.filter((p) => p.id !== place.id)]);
+        }
+      } catch {
+        /* keep local pin */
       }
-      const place = fieldPinToPlace(result.pin);
-      setShared((prev) => [place, ...prev.filter((p) => p.id !== place.id)]);
       cancelAdd();
       setKind(addKind);
-      selectPlace(place.id, true);
+      selectPlace(local.id, true);
     } catch {
       setDraftError("Could not save that pin. Try again.");
     } finally {
@@ -255,16 +307,49 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
     }
   }
 
+  function exportMyPins() {
+    const payload = buildPersonalExport(personal.pins);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `greers-ferry-my-pins-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importMyPins(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed: unknown = JSON.parse(String(reader.result || ""));
+        const pins = parsePersonalImport(parsed);
+        if (!pins || pins.length === 0) {
+          window.alert("That file has no valid personal pins.");
+          return;
+        }
+        const byId = new Map(personal.pins.map((p) => [p.id, p]));
+        for (const p of pins) byId.set(p.id, p);
+        personal.replaceAll([...byId.values()].sort((a, b) => b.updatedAt - a.updatedAt));
+        window.alert(`Imported ${pins.length} pin${pins.length === 1 ? "" : "s"} onto this device.`);
+      } catch {
+        window.alert("Could not read that JSON file.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {
       all: catalog.length,
       saved: favs.ids.length,
-      community: shared.filter((p) => p.community).length,
-      field: shared.filter((p) => p.field).length,
+      mine: personalPins.length,
+      community: catalog.filter((p) => p.community).length,
+      field: catalog.filter((p) => p.field).length,
     };
     for (const k of KIND_ORDER) c[k] = catalog.filter((p) => p.kind === k).length;
     return c;
-  }, [favs.ids.length, catalog, shared]);
+  }, [favs.ids.length, catalog, personalPins.length]);
 
   const addMeta = ADD_OPTIONS.find((o) => o.kind === addKind) ?? ADD_OPTIONS[0]!;
 
@@ -511,9 +596,24 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
                 />
               </label>
               <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-0.5">
+                <button
+                  type="button"
+                  onClick={() => personal.setMyMapOnly(!myMapOnly)}
+                  aria-pressed={myMapOnly}
+                  title="Hide community and field pins from other people — keep official catalog pins and yours"
+                  className={cn(
+                    "h-9 shrink-0 rounded-full px-3 text-xs font-medium whitespace-nowrap",
+                    myMapOnly
+                      ? "bg-accent text-accent-fg"
+                      : "bg-elevated text-muted ring-1 ring-border hover:text-fg",
+                  )}
+                >
+                  My map only
+                </button>
                 {(
                   [
                     ["all", "All"],
+                    ["mine", "My pins"],
                     ["island", "Islands"],
                     ["cove", "Coves"],
                     ["depth", "Depth"],
@@ -542,6 +642,35 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
                     <span className="ml-1 tabular-nums opacity-70">{counts[id] ?? 0}</span>
                   </button>
                 ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={exportMyPins}
+                  className="inline-flex h-8 items-center gap-1 rounded-sm bg-elevated px-2.5 text-[11px] font-medium text-muted hover:text-fg"
+                >
+                  <Download className="size-3" />
+                  Export my pins
+                </button>
+                <button
+                  type="button"
+                  onClick={() => importRef.current?.click()}
+                  className="inline-flex h-8 items-center gap-1 rounded-sm bg-elevated px-2.5 text-[11px] font-medium text-muted hover:text-fg"
+                >
+                  <Upload className="size-3" />
+                  Import my pins
+                </button>
+                <input
+                  ref={importRef}
+                  type="file"
+                  accept="application/json,.json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) importMyPins(file);
+                    e.target.value = "";
+                  }}
+                />
               </div>
               <div className="flex gap-1">
                 {(
@@ -586,35 +715,26 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
               />
             ) : null}
 
-            {hidden.count > 0 ? (
-              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 text-xs text-muted">
-                <span>{hidden.count} pin{hidden.count === 1 ? "" : "s"} hidden on this device</span>
-                <button
-                  type="button"
-                  className="font-medium text-accent hover:underline"
-                  onClick={() => hidden.clearAll()}
-                >
-                  Restore all
-                </button>
-              </div>
-            ) : null}
-
             {selected ? (
               <PlaceDetail
                 place={selected}
                 saved={favs.has(selected.id)}
+                personalRecord={personal.get(selected.id)}
                 onSave={() => favs.toggle(selected.id)}
                 onClose={() => setSelectedId(null)}
                 onHide={() => {
                   hidden.hide(selected.id);
                   setSelectedId(null);
                 }}
+                onPersonalUpsert={(pin) => personal.upsert(pin)}
+                onPersonalRemove={(id) => personal.remove(id)}
                 onUpdated={(next, previousId) => {
                   setShared((prev) => [next, ...prev.filter((p) => p.id !== previousId && p.id !== next.id)]);
                   setSelectedId(next.id);
                 }}
                 onDeleted={(id) => {
                   setShared((prev) => prev.filter((p) => p.id !== id));
+                  personal.removeBySharedId(id);
                   setSelectedId(null);
                 }}
               />
@@ -626,6 +746,7 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
               savedIds={favs.ids}
               onPick={(id) => selectPlace(id, true)}
               emptySaved={kind === "saved"}
+              emptyMine={kind === "mine"}
               emptyLocal={kind === "community"}
               emptyField={kind === "field" || kind === "depth" || kind === "temperature" || kind === "hazard" || kind === "pin"}
             />
@@ -633,7 +754,13 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
         </div>
       </aside>
 
-      {about ? <AboutCard onClose={() => setAbout(false)} /> : null}
+      {about ? (
+        <AboutCard
+          onClose={() => setAbout(false)}
+          hiddenCount={hidden.count}
+          onRestoreHidden={() => hidden.clearAll()}
+        />
+      ) : null}
     </div>
   );
 }
@@ -644,6 +771,7 @@ function PlaceList({
   savedIds,
   onPick,
   emptySaved,
+  emptyMine,
   emptyLocal,
   emptyField,
 }: {
@@ -652,6 +780,7 @@ function PlaceList({
   savedIds: string[];
   onPick: (id: string) => void;
   emptySaved: boolean;
+  emptyMine?: boolean;
   emptyLocal?: boolean;
   emptyField?: boolean;
 }) {
@@ -665,11 +794,13 @@ function PlaceList({
       <p className="px-4 py-6 text-sm text-muted">
         {emptySaved
           ? "Save islands and coves from a place card to build a short list."
-          : emptyLocal
-            ? "No local cove names yet. Tap Add pin → Cove name."
-            : emptyField
-              ? "No field pins yet. Tap Add pin to drop depth, temp, hazards, or custom marks."
-              : "No places match that search."}
+          : emptyMine
+            ? "No pins on this device yet. Tap Add pin — they stay here until you delete them."
+            : emptyLocal
+              ? "No local cove names yet. Tap Add pin → Cove name."
+              : emptyField
+                ? "No field pins yet. Tap Add pin to drop depth, temp, hazards, or custom marks."
+                : "No places match that search."}
       </p>
     );
   }
@@ -707,7 +838,15 @@ function PlaceList({
                       <span className="block text-xs text-muted">
                         {REGION_LABEL[p.region]}
                         {p.fieldValue ? ` · ${p.fieldValue}` : ""}
-                        {p.community ? " · local" : p.field ? " · field" : p.approx ? " · approx." : ""}
+                        {p.mine
+                          ? " · mine"
+                          : p.community
+                            ? " · local"
+                            : p.field
+                              ? " · field"
+                              : p.approx
+                                ? " · approx."
+                                : ""}
                       </span>
                     </span>
                   </button>
@@ -721,38 +860,53 @@ function PlaceList({
   );
 }
 
+function noteSeed(place: Place, personalRecord?: PersonalPin) {
+  if (personalRecord?.note) return personalRecord.note;
+  if (!(place.community || place.field || place.mine)) return "";
+  if (
+    place.description.startsWith("A locally named") ||
+    place.description.startsWith("A shared") ||
+    place.description.startsWith("Reported water") ||
+    place.description.startsWith("Your ") ||
+    place.description.startsWith("A cove name you") ||
+    place.description.startsWith("A pin you") ||
+    place.description.startsWith("A hazard you")
+  ) {
+    return "";
+  }
+  return place.description;
+}
+
 function PlaceDetail({
   place,
   saved,
+  personalRecord,
   onSave,
   onClose,
   onHide,
+  onPersonalUpsert,
+  onPersonalRemove,
   onUpdated,
   onDeleted,
 }: {
   place: Place;
   saved: boolean;
+  personalRecord?: PersonalPin;
   onSave: () => void;
   onClose: () => void;
   onHide: () => void;
+  onPersonalUpsert: (pin: PersonalPin) => void;
+  onPersonalRemove: (id: string) => void;
   onUpdated: (place: Place, previousId: string) => void;
   onDeleted: (id: string) => void;
 }) {
   const Icon = KIND_ICON[place.kind];
-  const editable = !!(place.community || place.field);
+  const editable = !!(place.mine || place.community || place.field);
   const official = !editable;
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(place.name);
   const [editValue, setEditValue] = useState(place.fieldValue ?? "");
-  const [editNote, setEditNote] = useState(
-    place.community || place.field
-      ? place.description.startsWith("A locally named") ||
-        place.description.startsWith("A shared") ||
-        place.description.startsWith("Reported water")
-        ? ""
-        : place.description
-      : "",
-  );
+  const [editNote, setEditNote] = useState(noteSeed(place, personalRecord));
   const [editError, setEditError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -760,22 +914,52 @@ function PlaceDetail({
     setEditing(false);
     setEditName(place.name);
     setEditValue(place.fieldValue ?? "");
-    setEditNote(
-      place.community || place.field
-        ? place.description.startsWith("A locally named") ||
-          place.description.startsWith("A shared") ||
-          place.description.startsWith("Reported water")
-          ? ""
-          : place.description
-        : "",
-    );
+    setEditNote(noteSeed(place, personalRecord));
     setEditError(null);
-  }, [place.id, place.name, place.fieldValue, place.description, place.community, place.field]);
+  }, [place.id, place.name, place.fieldValue, place.description, place.community, place.field, place.mine, personalRecord]);
 
   async function saveEdit() {
     setBusy(true);
     setEditError(null);
     try {
+      if (place.mine && personalRecord) {
+        const next: PersonalPin = {
+          ...personalRecord,
+          name: (editName || editValue || personalRecord.name).trim().slice(0, 80),
+          value: editValue.trim() || undefined,
+          note: editNote.trim() || undefined,
+          updatedAt: Date.now(),
+        };
+        onPersonalUpsert(next);
+        if (personalRecord.sharedId) {
+          const sharedId = personalRecord.sharedId;
+          if (personalRecord.kind === "cove") {
+            const id = parseLocalId(sharedId);
+            if (id != null) {
+              const result = await updateCommunityCove({
+                data: { id, name: next.name, note: next.note },
+              });
+              if (result.ok) onUpdated(communityCoveToPlace(result.cove), sharedId);
+            }
+          } else {
+            const parsed = parseFieldId(sharedId);
+            if (parsed) {
+              const result = await updateFieldPin({
+                data: {
+                  id: parsed.id,
+                  kind: parsed.kind,
+                  title: next.name,
+                  value: next.value,
+                  note: next.note,
+                },
+              });
+              if (result.ok) onUpdated(fieldPinToPlace(result.pin), sharedId);
+            }
+          }
+        }
+        setEditing(false);
+        return;
+      }
       if (place.community) {
         const id = parseLocalId(place.id);
         if (id == null) {
@@ -824,6 +1008,39 @@ function PlaceDetail({
 
   async function removePin() {
     if (!editable) return;
+    if (place.mine) {
+      if (
+        !window.confirm(
+          `Delete “${place.name}” from this device? This only removes your copy — it will not come back after reload.`,
+        )
+      ) {
+        return;
+      }
+      setBusy(true);
+      setEditError(null);
+      try {
+        const sharedId = personalRecord?.sharedId;
+        onPersonalRemove(place.id);
+        if (sharedId) {
+          if (personalRecord?.kind === "cove") {
+            const id = parseLocalId(sharedId);
+            if (id != null) await deleteCommunityCove({ data: { id } });
+          } else {
+            const parsed = parseFieldId(sharedId);
+            if (parsed) await deleteFieldPin({ data: { id: parsed.id } });
+          }
+          onDeleted(sharedId);
+        } else {
+          onClose();
+        }
+      } catch {
+        setEditError("Removed from this device. Shared copy may still be on the lake map.");
+        onClose();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!window.confirm(`Delete “${place.name}”? This permanently removes the shared pin.`)) return;
     setBusy(true);
     setEditError(null);
@@ -871,7 +1088,7 @@ function PlaceDetail({
           <p className="flex items-center gap-1.5 text-[11px] font-medium tracking-[0.12em] text-accent uppercase">
             <Icon className="size-3.5" />
             {KIND_LABEL[place.kind]} · {REGION_LABEL[place.region]}
-            {place.community ? " · Local" : place.field ? " · Field" : ""}
+            {place.mine ? " · Mine" : place.community ? " · Local" : place.field ? " · Field" : ""}
           </p>
           <h2 className="mt-1 font-display text-xl leading-snug font-medium italic">{place.name}</h2>
         </div>
@@ -970,7 +1187,12 @@ function PlaceDetail({
           deleted.
         </p>
       ) : null}
-      {!editing && editable ? (
+      {!editing && place.mine ? (
+        <p className="mt-3 text-xs text-muted">
+          Your pin — saved on this device until you delete it. Community sync will not remove it.
+        </p>
+      ) : null}
+      {!editing && editable && !place.mine ? (
         <p className="mt-3 text-xs text-muted">
           Shared pin you (or someone) added — edit or delete it below.
         </p>
@@ -1203,7 +1425,15 @@ function LayerSwitch({
   );
 }
 
-function AboutCard({ onClose }: { onClose: () => void }) {
+function AboutCard({
+  onClose,
+  hiddenCount,
+  onRestoreHidden,
+}: {
+  onClose: () => void;
+  hiddenCount: number;
+  onRestoreHidden: () => void;
+}) {
   return (
     <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/50 p-4 md:items-center">
       <div className="max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-xl bg-surface p-5 shadow-panel">
@@ -1244,15 +1474,30 @@ function AboutCard({ onClose }: { onClose: () => void }) {
         </dl>
         <p className="mt-4 text-xs leading-relaxed text-muted">
           Place names follow USGS GNIS, the Corps lake map, the local visitor guide, and the Greers
-          Ferry Lake cove names map. Anyone can add a cove name, water depth, temperature, hazard, or
-          custom pin — those shared marks show on every device. Saved hearts stay on this device.
-          Overlays stack: turn on Before the dam (USGS topo ≤1963, including Stark and the old
-          roads/railway) and Geology (Macrostrat / USGS bedrock) together — each has its own opacity
-          slider. With Geology on, tap the map for rock type, age, and a short explanation
-          (Macrostrat identify). Official catalog pins can be hidden on this device; pins you add
-          (cove, depth, temp, hazard, custom) can be edited or deleted. Zoom in for street labels on
-          sat, topo, and Map — they stay above overlays.
+          Ferry Lake cove names map. Pins you add are saved on this device (localStorage) and survive
+          reload until you delete them — use <b>My map only</b> to hide other people’s shared field
+          and cove pins while keeping the official catalog and yours. Export / Import my pins moves
+          that JSON between phones; signed-in cross-device sync is not wired yet (Better Auth exists
+          but personal pins stay device-local for now). Shared lake marks still post for others when
+          the server is up. Saved hearts and hidden official pins also stay on this device. Overlays
+          stack: Before the dam and Geology each have their own opacity. With Geology on, tap the map
+          for rock type and age.
         </p>
+        {hiddenCount > 0 ? (
+          <p className="mt-3 text-xs text-muted">
+            {hiddenCount} official pin{hiddenCount === 1 ? "" : "s"} hidden on this device.{" "}
+            <button
+              type="button"
+              className="font-medium text-accent hover:underline"
+              onClick={() => {
+                onRestoreHidden();
+                onClose();
+              }}
+            >
+              Restore hidden pins
+            </button>
+          </p>
+        ) : null}
       </div>
     </div>
   );
