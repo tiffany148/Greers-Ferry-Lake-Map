@@ -65,6 +65,22 @@ export const HISTORICAL_MOSAIC_RULE = HISTORICAL_MOSAIC_DETAIL;
 export const HISTORICAL_CREDIT = "USGS Historical Topographic Maps";
 export const HISTORICAL_DEFAULT_OPACITY = 0.78;
 
+/**
+ * Ground height (meters) for red USGS-style town names (e.g. Stark).
+ * The Greers Ferry 1973 woodland sheet does not print a clear "Stark" at the
+ * town site near Post Oak — this label restores it when Before the dam is on.
+ * Sized so ~z14 matches other topo labels; scales with zoom.
+ */
+export const HIST_PRINT_HEIGHT_M = 200;
+
+/** Screen font-size (px) for a hist-print label at lat/zoom. */
+export function histPrintFontPx(lat: number, zoom: number): number {
+  const mpp = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
+  const px = HIST_PRINT_HEIGHT_M / mpp;
+  // Cap so high zooms stay in line with sheet town names (not huge vs streets).
+  return Math.max(9, Math.min(26, Math.round(px * 10) / 10));
+}
+
 /** Web Mercator half-circumference in meters (EPSG:3857). */
 const WEB_MERCATOR_HALF = 20037508.342789244;
 
