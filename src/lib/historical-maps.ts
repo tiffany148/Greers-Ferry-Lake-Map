@@ -1,22 +1,19 @@
 /**
- * Pre-dam USGS topographic maps, served already-georeferenced in Web Mercator
- * from the Esri / USGS Historical Topographic Maps ImageServer.
+ * Historical USGS topographic overlay for Greers Ferry Lake.
  *
- * Coverage is stacked as two Leaflet tile layers (not one mosaic) so transparent
- * sheet collars cannot blank out the lake:
- *   1. Fill (250k) — continuous Russellville / Memphis backdrop
- *   2. Regional (125k) — Mountain View / Batesville 1930+ reprints (Stark, roads, railway)
+ * User preference: the green woodland / blue-water 7.5′ style (Greers Ferry 1973
+ * and neighbors) across the whole lake — it labels Stark and reads clearer than
+ * the beige Mountain View 125k reprints. Streets / Satellite / Topo stay the
+ * main basemap; this stack is opt-in only.
  *
- * A single mosaic with MT_FIRST lets Mountain View’s empty collar south of its
- * neatline “win” and hide Russellville underneath — that showed up as a sharp
- * horizontal cutoff on the live map. Tiles use png32 + transparent so collars
- * are real alpha. Opacity is applied on the historical pane (not per layer) so
- * those collars composite. (A ≤62.5k detail layer punched through to the basemap
- * in Chromium when stacked on top of fill, so it is omitted from the stack.)
+ * Coverage is two Leaflet tile layers (not one mosaic) so transparent sheet
+ * collars cannot blank the lake:
+ *   1. Fill — woodland-tint 100k–250k (overview / collar backdrop)
+ *   2. Detail — woodland-tint 24k quads 1970–1982 (Greers Ferry, Fairfield Bay, …)
  *
- * 1973+ 7.5′ quads (Greers Ferry, Fairfield Bay, …) already show the reservoir
- * and stay excluded. Photorevisions of the 1963 sheets (DateCurrent 1975+)
- * are excluded for the same reason.
+ * Beige 125k Mountain View / Batesville sheets (Woodland_Tint = N) are excluded.
+ * Tiles use png32 + transparent so collars are real alpha. Opacity is applied
+ * on the historical pane (not per layer) so those collars composite.
  */
 
 export const HISTORICAL_IMAGE_SERVER =
@@ -31,29 +28,39 @@ export type HistoricalMosaicRule = {
   ascending: boolean;
 };
 
-/** Continuous pre-dam backdrop — 1:250k sheets only. */
+/**
+ * Continuous woodland-tint backdrop for overview zooms and sheet collars.
+ * 100k Mountain View / Searcy / Batesville + 250k Russellville / Memphis.
+ */
 export const HISTORICAL_MOSAIC_FILL: HistoricalMosaicRule = {
   mosaicMethod: "esriMosaicAttribute",
   mosaicOperation: "MT_FIRST",
-  where: "DateCurrent <= 1963 AND Map_Scale >= 200000",
+  where:
+    "Woodland_Tint = 'Y' AND Map_Scale >= 100000 AND Map_Scale <= 250000 AND DateCurrent <= 1986",
   sortField: "Map_Scale",
-  sortValue: "250000",
+  sortValue: "100000",
   ascending: true,
 };
 
-/** Mid-scale cultural detail (Stark, roads, dismantled railway). */
-export const HISTORICAL_MOSAIC_REGIONAL: HistoricalMosaicRule = {
+/**
+ * Green/blue 7.5′ quads covering the lake (Stark on Greers Ferry 1973).
+ * Prefer earliest DateCurrent so 1973 sheets win over later photorevisions.
+ */
+export const HISTORICAL_MOSAIC_DETAIL: HistoricalMosaicRule = {
   mosaicMethod: "esriMosaicAttribute",
   mosaicOperation: "MT_FIRST",
   where:
-    "DateCurrent <= 1963 AND Map_Scale > 62500 AND Map_Scale < 200000 AND Imprint_Year >= 1930",
-  sortField: "Map_Scale",
-  sortValue: "125000",
+    "Woodland_Tint = 'Y' AND Map_Scale = 24000 AND DateCurrent >= 1970 AND DateCurrent <= 1982",
+  sortField: "DateCurrent",
+  sortValue: "1973",
   ascending: true,
 };
 
-/** @deprecated single-rule callers — prefer the fill + regional stack. */
-export const HISTORICAL_MOSAIC_RULE = HISTORICAL_MOSAIC_REGIONAL;
+/** @deprecated alias — prefer fill + detail stack. */
+export const HISTORICAL_MOSAIC_REGIONAL = HISTORICAL_MOSAIC_DETAIL;
+
+/** @deprecated single-rule callers — prefer the fill + detail stack. */
+export const HISTORICAL_MOSAIC_RULE = HISTORICAL_MOSAIC_DETAIL;
 
 export const HISTORICAL_CREDIT = "USGS Historical Topographic Maps";
 export const HISTORICAL_DEFAULT_OPACITY = 0.78;
@@ -65,7 +72,7 @@ export function historicalTileUrl(
   x: number,
   y: number,
   z: number,
-  rule: HistoricalMosaicRule = HISTORICAL_MOSAIC_REGIONAL,
+  rule: HistoricalMosaicRule = HISTORICAL_MOSAIC_DETAIL,
   tileSize = 256,
 ): string {
   const n = 2 ** z;

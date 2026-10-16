@@ -1,6 +1,6 @@
 # Greers Ferry Lake Map
 
-Interactive map of Greers Ferry Lake (Arkansas) — coves, islands, parks, and marinas, plus shared field pins (depth, temperature, hazards, custom marks), a **Geology** overlay, and a **Before the dam** overlay of USGS topographic maps from 1963 and earlier.
+Interactive map of Greers Ferry Lake (Arkansas) — coves, islands, parks, and marinas, plus shared field pins (depth, temperature, hazards, custom marks), a **Geology** overlay, and a **Before the dam** overlay of green/blue USGS historical topo (Greers Ferry 1973-style woodland quads, including Stark).
 
 ## Run it
 

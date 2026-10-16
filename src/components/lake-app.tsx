@@ -427,7 +427,7 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
             onClick={() => setHistorical((v) => !v)}
           >
             <History className="size-4" />
-            <span className="hidden sm:inline">{historical ? "1963 topo" : "Before the dam"}</span>
+            <span className="hidden sm:inline">{historical ? "Hist. topo" : "Before the dam"}</span>
           </Button>
           {historical ? (
             <label className="flex w-44 items-center gap-2 rounded-sm bg-surface px-3 py-2 shadow-panel">

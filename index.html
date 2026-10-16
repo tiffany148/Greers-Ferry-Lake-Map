@@ -220,7 +220,7 @@
         Official map pins can be <b>removed from your map</b> (hidden on this phone only — restore via the quiet Restore hidden control above when needed).
         <b>Streets</b> is the default lake map (green land / blue water). Satellite and Topo are alternatives. <b>Before the dam</b> and <b>Geology</b> are optional stack overlays — each has its own opacity slider.
         With Geology on, tap the map for rock type, age, and a short explanation (Macrostrat / USGS).
-        Before the dam uses USGS topo ≤1963. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
+        Before the dam uses the green/blue USGS historical topo (Greers Ferry 1973-style woodland quads) over the whole lake, including Stark. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
   </section>
@@ -543,16 +543,16 @@
     });
 
     const HIST_SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer";
-    /* Stacked layers — a single mosaic let Mountain View sheet collars blank the lower lake. */
+    /* Green/blue woodland stack — beige Mountain View 125k excluded (Woodland_Tint = N). */
     const HIST_FILL = {
       mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
-      where: "DateCurrent <= 1963 AND Map_Scale >= 200000",
-      sortField: "Map_Scale", sortValue: "250000", ascending: true
+      where: "Woodland_Tint = 'Y' AND Map_Scale >= 100000 AND Map_Scale <= 250000 AND DateCurrent <= 1986",
+      sortField: "Map_Scale", sortValue: "100000", ascending: true
     };
-    const HIST_REGIONAL = {
+    const HIST_DETAIL = {
       mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
-      where: "DateCurrent <= 1963 AND Map_Scale > 62500 AND Map_Scale < 200000 AND Imprint_Year >= 1930",
-      sortField: "Map_Scale", sortValue: "125000", ascending: true
+      where: "Woodland_Tint = 'Y' AND Map_Scale = 24000 AND DateCurrent >= 1970 AND DateCurrent <= 1982",
+      sortField: "DateCurrent", sortValue: "1973", ascending: true
     };
     const WEB_MERCATOR_HALF = 20037508.342789244;
     function historicalTileUrl(coords, rule) {
@@ -605,8 +605,8 @@
 
     // Keep each sheet at opacity 1 so PNG alpha collars composite; fade the pane.
     const histFill = makeHistTile(HIST_FILL);
-    const histRegional = makeHistTile(HIST_REGIONAL);
-    const histLayer = L.layerGroup([histFill, histRegional]);
+    const histDetail = makeHistTile(HIST_DETAIL);
+    const histLayer = L.layerGroup([histFill, histDetail]);
     function setHistOpacity(o) {
       map.getPane("historical").style.opacity = String(o);
     }

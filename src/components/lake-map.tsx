@@ -5,8 +5,8 @@ import { GEOLOGY_CREDIT, GEOLOGY_TILE_URL } from "@/lib/geology-maps";
 import {
   HISTORICAL_CREDIT,
   HISTORICAL_DEFAULT_OPACITY,
+  HISTORICAL_MOSAIC_DETAIL,
   HISTORICAL_MOSAIC_FILL,
-  HISTORICAL_MOSAIC_REGIONAL,
   historicalTileUrl,
   type HistoricalMosaicRule,
 } from "@/lib/historical-maps";
@@ -190,7 +190,7 @@ function bindPlaceMarker(
 
 function createHistoricalTile(L: LeafletNS, rule: HistoricalMosaicRule): TileLayer {
   // Opacity stays 1 on each sheet — fade the historical pane as a whole so PNG
-  // alpha collars composite correctly between fill / regional / detail.
+  // alpha collars composite correctly between fill and detail.
   const layer = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", {
     opacity: 1,
     pane: "historical",
@@ -209,11 +209,11 @@ function createHistoricalTile(L: LeafletNS, rule: HistoricalMosaicRule): TileLay
   return layer;
 }
 
-/** Stack fill (250k) → regional (125k) so sheet collars cannot blank the lake. */
+/** Stack woodland fill → 24k detail so sheet collars cannot blank the lake. */
 function createHistoricalLayer(L: LeafletNS): LayerGroup {
   return L.layerGroup([
     createHistoricalTile(L, HISTORICAL_MOSAIC_FILL),
-    createHistoricalTile(L, HISTORICAL_MOSAIC_REGIONAL),
+    createHistoricalTile(L, HISTORICAL_MOSAIC_DETAIL),
   ]);
 }
 

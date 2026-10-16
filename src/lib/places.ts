@@ -928,7 +928,7 @@ export const PLACES: Place[] = [
     region: "narrows",
     aliases: ["Stark AR", "Stark, AR"],
     description:
-      "Pre-dam valley community near Budd Creek and the Little Red River, shown on USGS Mountain View sheets before the reservoir. The old roads and dismantled railroad that served Stark still print on the Before the dam overlay — most of the town site is under the lake now.",
+      "Valley community near Budd Creek and the Little Red River. The Before the dam overlay uses the green/blue USGS Greers Ferry 1973-style topo that still labels Stark — most of the old town site is under the lake now.",
     access: "Boat over the Narrows / Budd Creek arm — look for the historical label",
     approx: true,
     importance: 3,
