@@ -350,6 +350,11 @@ export function LakeMap({
       const labelsPane = map.createPane("labels");
       labelsPane.style.zIndex = "450";
       labelsPane.style.pointerEvents = "none";
+      // Hist-print names (Stark): fixed screen size — not zoom-animated.
+      const histPrintPane = map.createPane("histPrint");
+      histPrintPane.style.zIndex = "460";
+      histPrintPane.style.pointerEvents = "none";
+      L.DomUtil.removeClass(histPrintPane, "leaflet-zoom-animated");
 
       const spec = TILES.streets;
       baseLayerIdRef.current = "streets";
@@ -387,6 +392,7 @@ export function LakeMap({
           keyboard: true,
           title: place.name,
           riseOnHover: true,
+          pane: place.histPrint ? "histPrint" : "markerPane",
         });
         bindPlaceMarker(L, m, place.id, addModeRef, measureRef, onSelectRef, onPickPointRef);
         markersRef.current.set(place.id, m);
@@ -544,6 +550,7 @@ export function LakeMap({
         keyboard: true,
         title: place.name,
         riseOnHover: true,
+        pane: place.histPrint ? "histPrint" : "markerPane",
       });
       bindPlaceMarker(L, m, place.id, addModeRef, measureRef, onSelectRef, onPickPointRef);
       markersRef.current.set(place.id, m);

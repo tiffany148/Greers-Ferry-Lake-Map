@@ -107,11 +107,13 @@
     .lf-geo-k { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
     .lf-geo-expl { margin: 8px 0 0; }
     .lf-geo-src, .lf-geo-credit { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
-    /* USGS historic-topo town name — red print lettering (Stark). */
+    /* USGS historic-topo town name — red print lettering (Stark).
+       Fixed screen size (matches other map labels); lives on a non-zoom-animated
+       pane so Leaflet zoom transforms cannot grow/shrink the text. */
     .lf-hist-print-name {
       position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
       font-family: "Times New Roman", "Liberation Serif", "Noto Serif", Georgia, serif;
-      font-style: italic; font-size: 14px; font-weight: 700; letter-spacing: 0.03em;
+      font-style: italic; font-size: 11px; font-weight: 700; letter-spacing: 0.03em;
       color: #c41e3a; white-space: nowrap; pointer-events: none;
       text-shadow: 0 0 1px rgb(255 255 255 / 0.95), 0 0 2px rgb(255 255 255 / 0.7),
         1px 0 0 rgb(255 250 240 / 0.55), -1px 0 0 rgb(255 250 240 / 0.55);
@@ -590,7 +592,11 @@
       return layer;
     }
 
-    const map = L.map("map", { zoomControl: true }).setView([35.53, -92.17], 11);
+    const map = L.map("map", {
+      zoomControl: true,
+      // Keep pin / hist-print label sizes stable while zooming (no grow/shrink).
+      markerZoomAnimation: false,
+    }).setView([35.53, -92.17], 11);
     window.__gflMap = map;
     map.createPane("historical");
     map.getPane("historical").style.zIndex = 350;
@@ -598,6 +604,11 @@
     map.getPane("geology").style.zIndex = 360;
     map.createPane("labels");
     map.getPane("labels").style.zIndex = 450;
+    // Fixed-size hist print names (Stark) — do not scale during zoom.
+    map.createPane("histPrint");
+    map.getPane("histPrint").style.zIndex = 460;
+    map.getPane("histPrint").style.pointerEvents = "none";
+    L.DomUtil.removeClass(map.getPane("histPrint"), "leaflet-zoom-animated");
 
     const basemaps = {
       streets: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }),
@@ -630,6 +641,7 @@
     // Red USGS-style print label for Stark (shown only with Before the dam).
     const starkPrint = L.marker([35.56748, -92.17631], {
       interactive: false, keyboard: false, zIndexOffset: 800,
+      pane: "histPrint",
       icon: L.divIcon({
         className: "lf-hist-print-icon",
         html: '<span class="lf-hist-print-name">Stark</span>',
