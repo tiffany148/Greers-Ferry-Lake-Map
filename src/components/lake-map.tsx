@@ -7,7 +7,6 @@ import {
   HISTORICAL_DEFAULT_OPACITY,
   HISTORICAL_MOSAIC_DETAIL,
   HISTORICAL_MOSAIC_FILL,
-  histPrintFontPx,
   historicalTileUrl,
   type HistoricalMosaicRule,
 } from "@/lib/historical-maps";
@@ -165,22 +164,13 @@ function paintMarker(
   place: Place,
   selected: boolean,
   zoom: number,
-  historical = false,
 ) {
   const root = mk.getElement()?.querySelector(".lf-marker");
   if (!root) return;
-  const histPrint = Boolean(place.histPrint && historical);
-  // Red print labels stay visible whenever the historical overlay is on.
-  const show = selected || histPrint || labeled(place, zoom);
+  const show = selected || labeled(place, zoom);
   root.classList.toggle("is-selected", selected);
   root.classList.toggle("is-labeled", show);
-  root.classList.toggle("is-hist-print", histPrint);
-  const nameEl = root.querySelector(".lf-name") as HTMLElement | null;
-  if (nameEl) {
-    // Scale with map zoom so Stark stays sized like printed topo names.
-    nameEl.style.fontSize = histPrint ? `${histPrintFontPx(place.lat, zoom)}px` : "";
-  }
-  mk.setZIndexOffset(selected ? 1000 : histPrint ? 800 : place.importance * 10);
+  mk.setZIndexOffset(selected ? 1000 : place.importance * 10);
 }
 
 function bindPlaceMarker(
@@ -302,7 +292,6 @@ export function LakeMap({
   const addKindRef = useRef(addKind);
   const placesRef = useRef(places);
   const geologyRef = useRef(geology);
-  const historicalRef = useRef(historical);
   const identifyAbortRef = useRef<AbortController | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -316,7 +305,6 @@ export function LakeMap({
   addKindRef.current = addKind;
   placesRef.current = places;
   geologyRef.current = geology;
-  historicalRef.current = historical;
   baseLayerIdRef.current = layer;
 
   useEffect(() => {
@@ -340,8 +328,6 @@ export function LakeMap({
         attributionControl: true,
         fadeAnimation: true,
         zoomAnimation: true,
-        // Animate markers with zoom so hist-print names (Stark) scale with
-        // the topo sheet labels; font-size is updated on zoomend to match.
         markerZoomAnimation: true,
         maxBounds: L.latLngBounds(LAKE_BOUNDS).pad(0.18),
         maxBoundsViscosity: 0.7,
@@ -429,7 +415,7 @@ export function LakeMap({
         for (const place of placesRef.current) {
           const mk = markersRef.current.get(place.id);
           if (!mk) continue;
-          paintMarker(mk, place, selectedRef.current === place.id, z, historicalRef.current);
+          paintMarker(mk, place, selectedRef.current === place.id, z);
         }
       };
       map.on("zoomend", syncChrome);
@@ -557,7 +543,7 @@ export function LakeMap({
       markersRef.current.set(place.id, m);
       if (visibleRef.current.has(place.id)) m.addTo(group);
       requestAnimationFrame(() =>
-        paintMarker(m, place, selectedRef.current === place.id, z, historicalRef.current),
+        paintMarker(m, place, selectedRef.current === place.id, z),
       );
     }
   }, [places, mapReady]);
@@ -612,13 +598,6 @@ export function LakeMap({
     } else if (map.hasLayer(hist)) {
       map.removeLayer(hist);
     }
-    // Refresh hist-print labels (e.g. red Stark) when the overlay toggles.
-    const z = map.getZoom();
-    for (const place of placesRef.current) {
-      const mk = markersRef.current.get(place.id);
-      if (!mk) continue;
-      paintMarker(mk, place, selectedRef.current === place.id, z, historical);
-    }
   }, [historical, histOpacity, mapReady]);
 
   useEffect(() => {
@@ -653,7 +632,7 @@ export function LakeMap({
     for (const place of placesRef.current) {
       const mk = markersRef.current.get(place.id);
       if (!mk) continue;
-      paintMarker(mk, place, selectedId === place.id, z, historicalRef.current);
+      paintMarker(mk, place, selectedId === place.id, z);
     }
   }, [selectedId]);
 
