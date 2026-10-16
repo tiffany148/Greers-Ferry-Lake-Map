@@ -107,6 +107,16 @@
     .lf-geo-k { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
     .lf-geo-expl { margin: 8px 0 0; }
     .lf-geo-src, .lf-geo-credit { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+    /* USGS historic-topo town name — red print lettering (Stark). */
+    .lf-hist-print-name {
+      position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+      font-family: "Times New Roman", "Liberation Serif", "Noto Serif", Georgia, serif;
+      font-style: italic; font-size: 14px; font-weight: 700; letter-spacing: 0.03em;
+      color: #c41e3a; white-space: nowrap; pointer-events: none;
+      text-shadow: 0 0 1px rgb(255 255 255 / 0.95), 0 0 2px rgb(255 255 255 / 0.7),
+        1px 0 0 rgb(255 250 240 / 0.55), -1px 0 0 rgb(255 250 240 / 0.55);
+    }
+    .leaflet-div-icon.lf-hist-print-icon { background: none !important; border: none !important; overflow: visible !important; }
     .sheet {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000;
       height: 42vh; display: flex; flex-direction: column;
@@ -617,6 +627,22 @@
 
     let currentBase = basemaps.streets.addTo(map);
     let histOn = false;
+    // Red USGS-style print label for Stark (shown only with Before the dam).
+    const starkPrint = L.marker([35.56748, -92.17631], {
+      interactive: false, keyboard: false, zIndexOffset: 800,
+      icon: L.divIcon({
+        className: "lf-hist-print-icon",
+        html: '<span class="lf-hist-print-name">Stark</span>',
+        iconSize: [0, 0], iconAnchor: [0, 0]
+      })
+    });
+    function syncHistPrintLabels() {
+      if (histOn) {
+        if (!map.hasLayer(starkPrint)) starkPrint.addTo(map);
+      } else if (map.hasLayer(starkPrint)) {
+        map.removeLayer(starkPrint);
+      }
+    }
     let geoOn = false;
     let addMode = false;
     let identifyAbort = null;
@@ -689,6 +715,7 @@
           setHistOpacity(Number(histOpacityEl.value));
           histLayer.addTo(map);
         } else map.removeLayer(histLayer);
+        syncHistPrintLabels();
       } else if (id === "geo") {
         geoOn = !geoOn;
         btn.classList.toggle("on", geoOn);
