@@ -108,12 +108,11 @@
     .lf-geo-expl { margin: 8px 0 0; }
     .lf-geo-src, .lf-geo-credit { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
     /* USGS historic-topo town name — red print lettering (Stark).
-       Fixed screen size (matches other map labels); lives on a non-zoom-animated
-       pane so Leaflet zoom transforms cannot grow/shrink the text. */
+       Font-size is set in JS from map zoom so it scales with printed topo labels. */
     .lf-hist-print-name {
       position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
       font-family: "Times New Roman", "Liberation Serif", "Noto Serif", Georgia, serif;
-      font-style: italic; font-size: 11px; font-weight: 700; letter-spacing: 0.03em;
+      font-style: italic; font-weight: 700; letter-spacing: 0.03em;
       color: #c41e3a; white-space: nowrap; pointer-events: none;
       text-shadow: 0 0 1px rgb(255 255 255 / 0.95), 0 0 2px rgb(255 255 255 / 0.7),
         1px 0 0 rgb(255 250 240 / 0.55), -1px 0 0 rgb(255 250 240 / 0.55);
@@ -594,8 +593,8 @@
 
     const map = L.map("map", {
       zoomControl: true,
-      // Keep pin / hist-print label sizes stable while zooming (no grow/shrink).
-      markerZoomAnimation: false,
+      // Scale hist-print names with the map (like printed topo labels).
+      markerZoomAnimation: true,
     }).setView([35.53, -92.17], 11);
     window.__gflMap = map;
     map.createPane("historical");
@@ -604,11 +603,6 @@
     map.getPane("geology").style.zIndex = 360;
     map.createPane("labels");
     map.getPane("labels").style.zIndex = 450;
-    // Fixed-size hist print names (Stark) — do not scale during zoom.
-    map.createPane("histPrint");
-    map.getPane("histPrint").style.zIndex = 460;
-    map.getPane("histPrint").style.pointerEvents = "none";
-    L.DomUtil.removeClass(map.getPane("histPrint"), "leaflet-zoom-animated");
 
     const basemaps = {
       streets: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }),
@@ -639,22 +633,38 @@
     let currentBase = basemaps.streets.addTo(map);
     let histOn = false;
     // Red USGS-style print label for Stark (shown only with Before the dam).
-    const starkPrint = L.marker([35.56748, -92.17631], {
+    // Font size tracks map zoom so it stays sized like other printed topo names.
+    const STARK_LAT = 35.56748, STARK_LNG = -92.17631;
+    const HIST_PRINT_HEIGHT_M = 90;
+    function histPrintFontPx(lat, zoom) {
+      const mpp = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
+      const px = HIST_PRINT_HEIGHT_M / mpp;
+      return Math.max(9, Math.min(56, Math.round(px * 10) / 10));
+    }
+    const starkPrint = L.marker([STARK_LAT, STARK_LNG], {
       interactive: false, keyboard: false, zIndexOffset: 800,
-      pane: "histPrint",
       icon: L.divIcon({
         className: "lf-hist-print-icon",
         html: '<span class="lf-hist-print-name">Stark</span>',
         iconSize: [0, 0], iconAnchor: [0, 0]
       })
     });
+    function syncStarkPrintSize() {
+      const el = document.querySelector(".lf-hist-print-name");
+      if (!el) return;
+      el.style.fontSize = histPrintFontPx(STARK_LAT, map.getZoom()) + "px";
+    }
     function syncHistPrintLabels() {
       if (histOn) {
         if (!map.hasLayer(starkPrint)) starkPrint.addTo(map);
+        requestAnimationFrame(syncStarkPrintSize);
       } else if (map.hasLayer(starkPrint)) {
         map.removeLayer(starkPrint);
       }
     }
+    // zoomend: set geographic font size for the new zoom. Mid-zoom scaling
+    // comes from Leaflet markerZoomAnimation (same as printed topo labels).
+    map.on("zoomend viewreset", syncStarkPrintSize);
     let geoOn = false;
     let addMode = false;
     let identifyAbort = null;
