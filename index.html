@@ -107,6 +107,17 @@
     .lf-geo-k { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
     .lf-geo-expl { margin: 8px 0 0; }
     .lf-geo-src, .lf-geo-credit { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+    /* USGS historic-topo town name — red print lettering (Stark).
+       Font-size is set in JS from map zoom so it scales with printed topo labels. */
+    .lf-hist-print-name {
+      position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+      font-family: "Times New Roman", "Liberation Serif", "Noto Serif", Georgia, serif;
+      font-style: italic; font-weight: 700; letter-spacing: 0.03em;
+      color: #c41e3a; white-space: nowrap; pointer-events: none;
+      text-shadow: 0 0 1px rgb(255 255 255 / 0.95), 0 0 2px rgb(255 255 255 / 0.7),
+        1px 0 0 rgb(255 250 240 / 0.55), -1px 0 0 rgb(255 250 240 / 0.55);
+    }
+    .leaflet-div-icon.lf-hist-print-icon { background: none !important; border: none !important; overflow: visible !important; }
     .sheet {
       position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000;
       height: 42vh; display: flex; flex-direction: column;
@@ -220,7 +231,7 @@
         Official map pins can be <b>removed from your map</b> (hidden on this phone only — restore via the quiet Restore hidden control above when needed).
         <b>Streets</b> is the default lake map (green land / blue water). Satellite and Topo are alternatives. <b>Before the dam</b> and <b>Geology</b> are optional stack overlays — each has its own opacity slider.
         With Geology on, tap the map for rock type, age, and a short explanation (Macrostrat / USGS).
-        Before the dam uses the green/blue USGS historical topo (Greers Ferry 1973-style woodland quads) — Stark, Higden, and Greers Ferry print on the sheets themselves. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
+        Before the dam uses the green/blue USGS historical topo (Greers Ferry 1973-style woodland quads). Stark prints in red on the overlay near Post Oak / Hurricane Creek. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
   </section>
@@ -582,6 +593,8 @@
 
     const map = L.map("map", {
       zoomControl: true,
+      // Scale hist-print names with the map (like printed topo labels).
+      markerZoomAnimation: true,
     }).setView([35.53, -92.17], 11);
     window.__gflMap = map;
     map.createPane("historical");
@@ -619,6 +632,38 @@
 
     let currentBase = basemaps.streets.addTo(map);
     let histOn = false;
+    // Red USGS-style print label for Stark (shown only with Before the dam).
+    // The woodland 24k sheet labels Higden / Greers Ferry clearly but not Stark
+    // at the Post Oak town site — this restores the printed look.
+    const STARK_LAT = 35.56748, STARK_LNG = -92.17631;
+    const HIST_PRINT_HEIGHT_M = 200;
+    function histPrintFontPx(lat, zoom) {
+      const mpp = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
+      const px = HIST_PRINT_HEIGHT_M / mpp;
+      return Math.max(9, Math.min(26, Math.round(px * 10) / 10));
+    }
+    const starkPrint = L.marker([STARK_LAT, STARK_LNG], {
+      interactive: false, keyboard: false, zIndexOffset: 800,
+      icon: L.divIcon({
+        className: "lf-hist-print-icon",
+        html: '<span class="lf-hist-print-name">Stark</span>',
+        iconSize: [0, 0], iconAnchor: [0, 0]
+      })
+    });
+    function syncStarkPrintSize() {
+      const el = document.querySelector(".lf-hist-print-name");
+      if (!el) return;
+      el.style.fontSize = histPrintFontPx(STARK_LAT, map.getZoom()) + "px";
+    }
+    function syncHistPrintLabels() {
+      if (histOn) {
+        if (!map.hasLayer(starkPrint)) starkPrint.addTo(map);
+        requestAnimationFrame(syncStarkPrintSize);
+      } else if (map.hasLayer(starkPrint)) {
+        map.removeLayer(starkPrint);
+      }
+    }
+    map.on("zoomend viewreset", syncStarkPrintSize);
     let geoOn = false;
     let addMode = false;
     let identifyAbort = null;
@@ -691,6 +736,7 @@
           setHistOpacity(Number(histOpacityEl.value));
           histLayer.addTo(map);
         } else map.removeLayer(histLayer);
+        syncHistPrintLabels();
       } else if (id === "geo") {
         geoOn = !geoOn;
         btn.classList.toggle("on", geoOn);

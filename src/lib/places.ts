@@ -36,6 +36,12 @@ export type Place = {
   fieldValue?: string;
   /** Device-local personal pin — survives reload until explicitly deleted. */
   mine?: boolean;
+  /**
+   * When Before the dam is on, render the name as red USGS-style print
+   * lettering (no modern pin chrome) — e.g. flooded towns like Stark that the
+   * woodland sheet does not label clearly at the town site.
+   */
+  histPrint?: boolean;
 };
 
 export const KIND_LABEL: Record<PlaceKind, string> = {
@@ -923,16 +929,17 @@ export const PLACES: Place[] = [
     id: "stark",
     name: "Stark",
     kind: "landmark",
-    // Town site on the USGS Mountain View 125k historic sheet (Narrows / west of Hurricane Bay).
+    // Town site near Post Oak / Hurricane Creek (Narrows arm) — red hist-print when Before the dam is on.
     lat: 35.56748,
     lon: -92.17631,
     region: "narrows",
     aliases: ["Stark AR", "Stark, AR"],
     description:
-      "Valley community near The Narrows and the Little Red River. On Before the dam (Mountain View 125k sheet), Stark is printed in red on the map — most of the town site is under the lake now.",
-    access: "Boat the Narrows arm — look for Stark printed on the historical overlay",
+      "Valley community near The Narrows and the Little Red River. On Before the dam, Stark prints in red like the old USGS sheets — most of the town site is under the lake now.",
+    access: "Boat the Narrows arm — look for the red Stark label on the historical overlay",
     approx: true,
     importance: 3,
+    histPrint: true,
   },
   {
     id: "fairfield-bay",
