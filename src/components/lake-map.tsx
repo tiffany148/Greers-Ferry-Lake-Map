@@ -50,8 +50,9 @@ const TILES: Record<MapLayerId, { url: string; attr: string; maxZoom: number }> 
     maxZoom: 18,
   },
   streets: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-    attr: "Tiles © Esri",
+    // OSM — green land / blue water lake look (matches Pages default).
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attr: "&copy; OpenStreetMap",
     maxZoom: 19,
   },
 };
@@ -339,7 +340,8 @@ export function LakeMap({
       labelsPane.style.zIndex = "450";
       labelsPane.style.pointerEvents = "none";
 
-      const spec = TILES.satellite;
+      const spec = TILES.streets;
+      baseLayerIdRef.current = "streets";
       baseLayerRef.current = L.tileLayer(spec.url, {
         attribution: spec.attr,
         maxZoom: spec.maxZoom,

@@ -114,7 +114,8 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [region, setRegion] = useState<RegionFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [layer, setLayer] = useState<MapLayerId>("satellite");
+  // Modern lake map (green land / blue water) is the primary view; historical is opt-in.
+  const [layer, setLayer] = useState<MapLayerId>("streets");
   const [historical, setHistorical] = useState(false);
   const [histOpacity, setHistOpacity] = useState(HISTORICAL_DEFAULT_OPACITY);
   const [geology, setGeology] = useState(false);
@@ -1410,9 +1411,9 @@ function LayerSwitch({
       </span>
       {(
         [
+          ["streets", "Streets"],
           ["satellite", "Sat"],
           ["topo", "Topo"],
-          ["streets", "Map"],
         ] as const
       ).map(([id, label]) => (
         <button
