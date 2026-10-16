@@ -175,6 +175,7 @@
   <section class="sheet mid" id="sheet">
     <div class="handle-wrap" id="handle"><div class="handle"></div></div>
     <div class="filters">
+      <button class="chip" id="myMapOnly" type="button" aria-pressed="true" title="Official catalog + your pins on this phone">My map only</button>
       <button class="chip on" data-type="all">All</button>
       <button class="chip" data-type="mine">My pins</button>
       <button class="chip" data-type="cove">Coves</button>
@@ -183,11 +184,19 @@
       <button class="chip" data-type="park">Parks</button>
       <button class="chip" data-type="swim">Swim</button>
     </div>
+    <div class="pin-io" style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 8px">
+      <button type="button" class="tool" id="exportPins">Export my pins</button>
+      <button type="button" class="tool" id="importPins">Import my pins</button>
+      <input type="file" id="importPinsFile" accept="application/json,.json" hidden />
+    </div>
     <div class="sheet-body">
       <div class="list" id="list"></div>
       <p class="note">
         Tap <b>Add pin</b> and choose a type (cove, depth, temperature, hazard, or custom). Tap a pin for info.
-        <b>My pins</b> can be edited or deleted. Official map pins can be <b>removed from your map</b> (hidden on this phone only — use Restore hidden to bring them back).
+        <b>My pins</b> are stored on this phone (localStorage) and stay until you delete them — reload and browser restart keep them.
+        <b>My map only</b> keeps the official catalog plus your pins (this site has no live community feed; the React app can hide shared pins the same way).
+        Use <b>Export / Import my pins</b> to move pins to another phone. Cross-device sign-in sync is not on this Pages build.
+        Official map pins can be <b>removed from your map</b> (hidden on this phone only — use Restore hidden to bring them back).
         Basemaps (Streets / Satellite / Topo) are exclusive. <b>Before the dam</b> and <b>Geology</b> stack on top and can both stay on — each has its own opacity slider.
         With Geology on, tap the map for rock type, age, and a short explanation (Macrostrat / USGS).
         Before the dam uses USGS topo ≤1963. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
@@ -383,16 +392,57 @@
       mine: "My pin", depth: "Depth", temperature: "Temperature", hazard: "Hazard", pin: "Pin"
     };
     const STORE = "gfl-my-pins-v2";
+    const STORE_BAK = "gfl-my-pins-v2-bak";
     const HIDDEN_STORE = "gfl-hidden-pins-v1";
+    const MY_MAP_ONLY_KEY = "gfl-my-map-only-v1";
+    function sanitizeMinePin(p) {
+      if (!p || typeof p !== "object") return null;
+      if (typeof p.name !== "string" || !p.name.trim()) return null;
+      if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return null;
+      const type = typeof p.type === "string" && p.type ? p.type : "cove";
+      return {
+        id: p.id != null ? String(p.id) : String(Date.now()) + "-" + Math.random().toString(36).slice(2, 8),
+        name: String(p.name).trim().slice(0, 80),
+        type,
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        note: p.note ? String(p.note).slice(0, 280) : "",
+        value: p.value ? String(p.value).slice(0, 40) : ""
+      };
+    }
     const loadMine = () => {
-      try {
-        const v2 = JSON.parse(localStorage.getItem(STORE) || "null");
-        if (Array.isArray(v2)) return v2;
-        const v1 = JSON.parse(localStorage.getItem("gfl-my-pins-v1") || "[]");
-        return Array.isArray(v1) ? v1.map((p) => ({ ...p, type: p.type || "cove" })) : [];
-      } catch { return []; }
+      const tryKey = (key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return null;
+          return parsed.map(sanitizeMinePin).filter(Boolean);
+        } catch { return null; }
+      };
+      const v2 = tryKey(STORE);
+      if (v2) return v2;
+      const bak = tryKey(STORE_BAK);
+      if (bak) {
+        try { localStorage.setItem(STORE, JSON.stringify(bak)); } catch (_) {}
+        return bak;
+      }
+      const v1raw = tryKey("gfl-my-pins-v1");
+      if (v1raw) return v1raw;
+      return [];
     };
-    const saveMine = (arr) => localStorage.setItem(STORE, JSON.stringify(arr));
+    /** Persist personal pins. Never silently wipe — only writes a validated array. */
+    const saveMine = (arr) => {
+      if (!Array.isArray(arr)) return;
+      const clean = arr.map(sanitizeMinePin).filter(Boolean);
+      try {
+        const json = JSON.stringify(clean);
+        localStorage.setItem(STORE, json);
+        try { localStorage.setItem(STORE_BAK, json); } catch (_) {}
+      } catch (err) {
+        alert("Could not save your pins on this phone. Storage may be full or blocked.");
+      }
+    };
     const pinKey = (p) => p.custom && p.id ? String(p.id) : (p.name + "|" + p.lat + "|" + p.lng);
     const loadHidden = () => {
       try {
@@ -402,6 +452,22 @@
     };
     const saveHidden = (set) => localStorage.setItem(HIDDEN_STORE, JSON.stringify([...set]));
     let hidden = loadHidden();
+    let myMapOnly = true;
+    try { myMapOnly = localStorage.getItem(MY_MAP_ONLY_KEY) !== "0"; } catch (_) {}
+    const myMapOnlyBtn = document.getElementById("myMapOnly");
+    function syncMyMapOnlyBtn() {
+      myMapOnlyBtn.classList.toggle("on", myMapOnly);
+      myMapOnlyBtn.setAttribute("aria-pressed", myMapOnly ? "true" : "false");
+    }
+    syncMyMapOnlyBtn();
+    myMapOnlyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      myMapOnly = !myMapOnly;
+      try { localStorage.setItem(MY_MAP_ONLY_KEY, myMapOnly ? "1" : "0"); } catch (_) {}
+      syncMyMapOnlyBtn();
+      // Pages has no live community feed; toggle still re-renders so the preference is obvious.
+      render(currentFilter());
+    });
     const hiddenBanner = document.getElementById("hiddenBanner");
     const hiddenCountEl = document.getElementById("hiddenCount");
     function syncHiddenBanner() {
@@ -414,6 +480,48 @@
       saveHidden(hidden);
       syncHiddenBanner();
       render(currentFilter());
+    });
+    document.getElementById("exportPins").addEventListener("click", () => {
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        source: "greers-ferry-pages",
+        pins: mine.map(sanitizeMinePin).filter(Boolean)
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "greers-ferry-my-pins-" + new Date().toISOString().slice(0, 10) + ".json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    document.getElementById("importPins").addEventListener("click", () => {
+      document.getElementById("importPinsFile").click();
+    });
+    document.getElementById("importPinsFile").addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || ""));
+          const list = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.pins) ? parsed.pins : null);
+          if (!list) { alert("That file has no valid pins."); return; }
+          const incoming = list.map(sanitizeMinePin).filter(Boolean);
+          if (!incoming.length) { alert("That file has no valid pins."); return; }
+          const byId = new Map(mine.map((p) => [String(p.id), p]));
+          incoming.forEach((p) => byId.set(String(p.id), p));
+          mine = [...byId.values()];
+          saveMine(mine);
+          render(currentFilter());
+          alert("Imported " + incoming.length + " pin" + (incoming.length === 1 ? "" : "s") + " onto this phone.");
+        } catch (_) {
+          alert("Could not read that JSON file.");
+        }
+      };
+      reader.readAsText(file);
     });
 
     const HIST_SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer";
@@ -769,8 +877,8 @@
 
     document.querySelector(".filters").addEventListener("click", (e) => {
       const chip = e.target.closest(".chip");
-      if (!chip) return;
-      document.querySelectorAll(".chip").forEach((c) => c.classList.remove("on"));
+      if (!chip || chip.id === "myMapOnly") return;
+      document.querySelectorAll(".chip[data-type]").forEach((c) => c.classList.remove("on"));
       chip.classList.add("on");
       closeDetail();
       render(chip.dataset.type);
@@ -878,7 +986,7 @@
         mine.push(pin);
         saveMine(mine);
         setAddMode(false);
-        document.querySelectorAll(".chip").forEach((c) => c.classList.toggle("on", c.dataset.type === "mine"));
+        document.querySelectorAll(".chip[data-type]").forEach((c) => c.classList.toggle("on", c.dataset.type === "mine"));
         render("mine");
         openDetail({ ...pin, custom: true });
         return;

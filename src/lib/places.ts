@@ -34,6 +34,8 @@ export type Place = {
   /** Shared field report (depth / temp / hazard / custom pin). */
   field?: boolean;
   fieldValue?: string;
+  /** Device-local personal pin — survives reload until explicitly deleted. */
+  mine?: boolean;
 };
 
 export const KIND_LABEL: Record<PlaceKind, string> = {
