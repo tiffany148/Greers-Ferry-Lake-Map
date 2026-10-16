@@ -715,19 +715,6 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
               />
             ) : null}
 
-            {hidden.count > 0 ? (
-              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2 text-xs text-muted">
-                <span>{hidden.count} pin{hidden.count === 1 ? "" : "s"} hidden on this device</span>
-                <button
-                  type="button"
-                  className="font-medium text-accent hover:underline"
-                  onClick={() => hidden.clearAll()}
-                >
-                  Restore all
-                </button>
-              </div>
-            ) : null}
-
             {selected ? (
               <PlaceDetail
                 place={selected}
@@ -767,7 +754,13 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
         </div>
       </aside>
 
-      {about ? <AboutCard onClose={() => setAbout(false)} /> : null}
+      {about ? (
+        <AboutCard
+          onClose={() => setAbout(false)}
+          hiddenCount={hidden.count}
+          onRestoreHidden={() => hidden.clearAll()}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1432,7 +1425,15 @@ function LayerSwitch({
   );
 }
 
-function AboutCard({ onClose }: { onClose: () => void }) {
+function AboutCard({
+  onClose,
+  hiddenCount,
+  onRestoreHidden,
+}: {
+  onClose: () => void;
+  hiddenCount: number;
+  onRestoreHidden: () => void;
+}) {
   return (
     <div className="absolute inset-0 z-40 flex items-end justify-center bg-bg/50 p-4 md:items-center">
       <div className="max-h-[80dvh] w-full max-w-md overflow-y-auto rounded-xl bg-surface p-5 shadow-panel">
@@ -1482,6 +1483,21 @@ function AboutCard({ onClose }: { onClose: () => void }) {
           stack: Before the dam and Geology each have their own opacity. With Geology on, tap the map
           for rock type and age.
         </p>
+        {hiddenCount > 0 ? (
+          <p className="mt-3 text-xs text-muted">
+            {hiddenCount} official pin{hiddenCount === 1 ? "" : "s"} hidden on this device.{" "}
+            <button
+              type="button"
+              className="font-medium text-accent hover:underline"
+              onClick={() => {
+                onRestoreHidden();
+                onClose();
+              }}
+            >
+              Restore hidden pins
+            </button>
+          </p>
+        ) : null}
       </div>
     </div>
   );
