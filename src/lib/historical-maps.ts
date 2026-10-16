@@ -7,7 +7,7 @@
  *
  * Coverage is two Leaflet tile layers so transparent sheet collars cannot blank
  * the lake:
- *   1. Fill — 250k Russellville / Memphis backdrop east of the Mountain View neatline
+ *   1. Fill — Batesville 125k (same classic beige style) east of the Mountain View neatline
  *   2. Mountain View 125k (Imprint ≥ 1930, prefer 1949) — Stark + pre-lake valley
  *
  * Tiles use png32 + transparent so collars are real alpha. Opacity is applied
@@ -26,14 +26,19 @@ export type HistoricalMosaicRule = {
   ascending: boolean;
 };
 
-/** Continuous backdrop for areas outside the Mountain View neatline (east lake / dam). */
+/**
+ * Batesville 125k — same classic beige style as Mountain View, covering the
+ * east lake / dam side of the neatline so green woodland 250k sheets do not
+ * create a beige/green split under the overlay.
+ */
 export const HISTORICAL_MOSAIC_FILL: HistoricalMosaicRule = {
   mosaicMethod: "esriMosaicAttribute",
   mosaicOperation: "MT_FIRST",
-  where: "DateCurrent <= 1963 AND Map_Scale >= 200000",
-  sortField: "Map_Scale",
-  sortValue: "250000",
-  ascending: true,
+  where:
+    "Map_Name = 'Batesville' AND Map_Scale = 125000 AND Imprint_Year >= 1920",
+  sortField: "Imprint_Year",
+  sortValue: "1942",
+  ascending: false,
 };
 
 /**

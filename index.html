@@ -543,11 +543,11 @@
     });
 
     const HIST_SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer";
-    /* Mountain View 125k (Stark in red on the sheet) + 250k fill east of the neatline. */
+    /* Mountain View 125k (Stark on the sheet) + Batesville 125k fill east of the neatline. */
     const HIST_FILL = {
       mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
-      where: "DateCurrent <= 1963 AND Map_Scale >= 200000",
-      sortField: "Map_Scale", sortValue: "250000", ascending: true
+      where: "Map_Name = 'Batesville' AND Map_Scale = 125000 AND Imprint_Year >= 1920",
+      sortField: "Imprint_Year", sortValue: "1942", ascending: false
     };
     const HIST_DETAIL = {
       mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
