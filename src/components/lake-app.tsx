@@ -114,7 +114,8 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
   const [kind, setKind] = useState<KindFilter>("all");
   const [region, setRegion] = useState<RegionFilter>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [layer, setLayer] = useState<MapLayerId>("satellite");
+  // Modern lake map (green land / blue water) is the primary view; historical is opt-in.
+  const [layer, setLayer] = useState<MapLayerId>("streets");
   const [historical, setHistorical] = useState(false);
   const [histOpacity, setHistOpacity] = useState(HISTORICAL_DEFAULT_OPACITY);
   const [geology, setGeology] = useState(false);
@@ -426,7 +427,7 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
             onClick={() => setHistorical((v) => !v)}
           >
             <History className="size-4" />
-            <span className="hidden sm:inline">{historical ? "1963 topo" : "Before the dam"}</span>
+            <span className="hidden sm:inline">{historical ? "Hist. topo" : "Before the dam"}</span>
           </Button>
           {historical ? (
             <label className="flex w-44 items-center gap-2 rounded-sm bg-surface px-3 py-2 shadow-panel">
@@ -753,6 +754,12 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
           </div>
         </div>
       </aside>
+
+      {geology && !addMode ? (
+        <p className="pointer-events-none absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-20 rounded-md bg-surface/95 px-3 py-2 text-center text-xs text-muted shadow-panel md:inset-x-auto md:right-4 md:bottom-4 md:max-w-xs md:text-left">
+          Geology on — tap the map for rock type &amp; age
+        </p>
+      ) : null}
 
       {about ? (
         <AboutCard
@@ -1404,9 +1411,9 @@ function LayerSwitch({
       </span>
       {(
         [
+          ["streets", "Streets"],
           ["satellite", "Sat"],
           ["topo", "Topo"],
-          ["streets", "Map"],
         ] as const
       ).map(([id, label]) => (
         <button

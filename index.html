@@ -48,11 +48,29 @@
     .fade-wrap input[type="range"] { width: 72px; accent-color: var(--accent); }
     .fade-wrap .pct { min-width: 2.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
     .geo-hint {
-      display: none; position: absolute; top: 118px; left: 10px; right: 10px; z-index: 1100;
+      display: none; position: absolute; left: 10px; right: 10px; z-index: 1050;
+      /* Sit above the pin sheet — never under the STACK header (that clipped identify UI). */
+      top: auto; bottom: calc(118px + env(safe-area-inset-bottom));
       background: rgba(11,61,77,.94); color: var(--text); border: 1px solid #1f6276;
       border-radius: 10px; padding: 8px 10px; font-size: 12px; text-align: center;
+      pointer-events: none;
     }
     .geo-hint.show { display: block; }
+    .geo-card {
+      display: none; position: absolute; left: 10px; right: 10px; z-index: 1260;
+      bottom: calc(128px + env(safe-area-inset-bottom));
+      background: rgba(11,61,77,.98); border: 1px solid #1f6276; border-radius: 14px;
+      padding: 12px; max-height: min(38vh, 280px); overflow: auto;
+      box-shadow: 0 12px 40px rgba(0,0,0,.45);
+    }
+    .geo-card.show { display: block; }
+    .geo-card .geo-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .geo-card .geo-card-close {
+      flex: 0 0 auto; background: var(--card); color: var(--text); border: 1px solid #1f6276;
+      border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1;
+    }
+    /* Identify used to be a Leaflet popup under the STACK bar — keep map popups below chrome. */
+    .leaflet-popup-pane { z-index: 650; }
     .add-menu {
       display: none; position: absolute; top: 108px; right: 10px; z-index: 1200;
       width: min(240px, calc(100vw - 20px)); background: rgba(11,61,77,.98);
@@ -168,6 +186,12 @@
     </div>
   </header>
   <div class="geo-hint" id="geoHint">Geology on — tap the map for rock type &amp; age</div>
+  <div class="geo-card" id="geoCard" role="dialog" aria-label="Geology identify">
+    <div class="geo-card-top">
+      <div id="geoCardBody"></div>
+      <button type="button" class="geo-card-close" id="geoCardClose" aria-label="Close geology info">×</button>
+    </div>
+  </div>
   <section class="sheet mid" id="sheet">
     <div class="handle-wrap" id="handle"><div class="handle"></div></div>
     <div class="filters">
@@ -194,9 +218,9 @@
         <b>My map only</b> keeps the official catalog plus your pins (this site has no live community feed; the React app can hide shared pins the same way).
         Use <b>Export / Import my pins</b> to move pins to another phone. Cross-device sign-in sync is not on this Pages build.
         Official map pins can be <b>removed from your map</b> (hidden on this phone only — restore via the quiet Restore hidden control above when needed).
-        Basemaps (Streets / Satellite / Topo) are exclusive. <b>Before the dam</b> and <b>Geology</b> stack on top and can both stay on — each has its own opacity slider.
+        <b>Streets</b> is the default lake map (green land / blue water). Satellite and Topo are alternatives. <b>Before the dam</b> and <b>Geology</b> are optional stack overlays — each has its own opacity slider.
         With Geology on, tap the map for rock type, age, and a short explanation (Macrostrat / USGS).
-        Before the dam uses USGS topo ≤1963. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
+        Before the dam uses the green/blue USGS historical topo (Greers Ferry 1973-style woodland quads) over the whole lake, including Stark. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
   </section>
@@ -519,16 +543,19 @@
     });
 
     const HIST_SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer";
-    const HIST_MOSAIC = {
-      mosaicMethod: "esriMosaicAttribute",
-      mosaicOperation: "MT_FIRST",
-      where: "DateCurrent <= 1963 AND (Map_Scale <= 62500 OR Imprint_Year >= 1930)",
-      sortField: "Map_Scale",
-      sortValue: "24000",
-      ascending: true
+    /* Green/blue woodland stack — beige Mountain View 125k excluded (Woodland_Tint = N). */
+    const HIST_FILL = {
+      mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
+      where: "Woodland_Tint = 'Y' AND Map_Scale >= 100000 AND Map_Scale <= 250000 AND DateCurrent <= 1986",
+      sortField: "Map_Scale", sortValue: "100000", ascending: true
+    };
+    const HIST_DETAIL = {
+      mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
+      where: "Woodland_Tint = 'Y' AND Map_Scale = 24000 AND DateCurrent >= 1970 AND DateCurrent <= 1982",
+      sortField: "DateCurrent", sortValue: "1973", ascending: true
     };
     const WEB_MERCATOR_HALF = 20037508.342789244;
-    function historicalTileUrl(coords) {
+    function historicalTileUrl(coords, rule) {
       const z = coords.z, x = coords.x, y = coords.y, tileSize = 256;
       const n = Math.pow(2, z);
       const size = (2 * WEB_MERCATOR_HALF) / n;
@@ -536,15 +563,25 @@
       const ymax = WEB_MERCATOR_HALF - y * size;
       const xmax = xmin + size;
       const ymin = ymax - size;
-      const mosaicRule = encodeURIComponent(JSON.stringify(HIST_MOSAIC));
+      const mosaicRule = encodeURIComponent(JSON.stringify(rule));
       return HIST_SERVER + "/exportImage"
         + "?bbox=" + xmin + "," + ymin + "," + xmax + "," + ymax
         + "&bboxSR=3857&imageSR=3857&size=" + tileSize + "," + tileSize
-        + "&format=png&interpolation=RSP_BilinearInterpolation"
+        + "&format=png32&transparent=true&interpolation=RSP_BilinearInterpolation"
         + "&mosaicRule=" + mosaicRule + "&f=image";
+    }
+    function makeHistTile(rule) {
+      const layer = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", {
+        maxZoom: 18, maxNativeZoom: 16, minZoom: 10, opacity: 1,
+        pane: "historical", attribution: "USGS Historical Topographic Maps",
+        detectRetina: false, updateWhenIdle: true, keepBuffer: 2
+      });
+      layer.getTileUrl = function (coords) { return historicalTileUrl(coords, rule); };
+      return layer;
     }
 
     const map = L.map("map", { zoomControl: true }).setView([35.53, -92.17], 11);
+    window.__gflMap = map;
     map.createPane("historical");
     map.getPane("historical").style.zIndex = 350;
     map.createPane("geology");
@@ -566,10 +603,13 @@
       { maxZoom: 19, minZoom: 13, pane: "labels", opacity: 0.9, attribution: "Esri" }
     );
 
-    const histLayer = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", {
-      maxZoom: 15, opacity: 0.78, pane: "historical", attribution: "USGS Historical Topographic Maps"
-    });
-    histLayer.getTileUrl = function (coords) { return historicalTileUrl(coords); };
+    // Keep each sheet at opacity 1 so PNG alpha collars composite; fade the pane.
+    const histFill = makeHistTile(HIST_FILL);
+    const histDetail = makeHistTile(HIST_DETAIL);
+    const histLayer = L.layerGroup([histFill, histDetail]);
+    function setHistOpacity(o) {
+      map.getPane("historical").style.opacity = String(o);
+    }
 
     const geoLayer = L.tileLayer("https://tiles.macrostrat.org/carto/{z}/{x}/{y}.png", {
       maxZoom: 18, opacity: 0.55, pane: "geology", attribution: "Geology © Macrostrat / USGS"
@@ -587,6 +627,15 @@
     const histPct = document.getElementById("histPct");
     const geoPct = document.getElementById("geoPct");
     const geoHint = document.getElementById("geoHint");
+    const geoCard = document.getElementById("geoCard");
+    const geoCardBody = document.getElementById("geoCardBody");
+    function closeGeoCard() {
+      geoCard.classList.remove("show");
+      geoCardBody.innerHTML = "";
+      if (identifyAbort) identifyAbort.abort();
+      if (typeof syncOverlayChrome === "function") syncOverlayChrome();
+    }
+    document.getElementById("geoCardClose").addEventListener("click", closeGeoCard);
 
     function syncLabels() {
       const want = currentBase !== basemaps.streets;
@@ -602,13 +651,14 @@
     function syncOverlayChrome() {
       histFade.classList.toggle("show", histOn);
       geoFade.classList.toggle("show", geoOn);
-      geoHint.classList.toggle("show", geoOn && !addMode);
+      const geoCardOpen = geoCard.classList.contains("show");
+      geoHint.classList.toggle("show", geoOn && !addMode && !geoCardOpen);
       histPct.textContent = String(Math.round(Number(histOpacityEl.value) * 100));
       geoPct.textContent = String(Math.round(Number(geoOpacityEl.value) * 100));
     }
 
     histOpacityEl.addEventListener("input", () => {
-      histLayer.setOpacity(Number(histOpacityEl.value));
+      setHistOpacity(Number(histOpacityEl.value));
       syncOverlayChrome();
     });
     geoOpacityEl.addEventListener("input", () => {
@@ -636,7 +686,7 @@
         btn.classList.toggle("on", histOn);
         btn.setAttribute("aria-pressed", histOn ? "true" : "false");
         if (histOn) {
-          histLayer.setOpacity(Number(histOpacityEl.value));
+          setHistOpacity(Number(histOpacityEl.value));
           histLayer.addTo(map);
         } else map.removeLayer(histLayer);
       } else if (id === "geo") {
@@ -648,8 +698,7 @@
           geoLayer.addTo(map);
         } else {
           map.removeLayer(geoLayer);
-          map.closePopup();
-          if (identifyAbort) identifyAbort.abort();
+          closeGeoCard();
         }
       }
       syncOverlayChrome();
@@ -691,10 +740,11 @@
     async function identifyAt(latlng) {
       if (identifyAbort) identifyAbort.abort();
       identifyAbort = new AbortController();
-      const popup = L.popup({ maxWidth: 320 })
-        .setLatLng(latlng)
-        .setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up bedrock…</p></div>')
-        .openOn(map);
+      // Bottom card — not a Leaflet popup — so STACK / hint never cover the result.
+      closeDetail();
+      geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up bedrock…</p></div>';
+      geoCard.classList.add("show");
+      syncOverlayChrome();
       try {
         const url = "https://macrostrat.org/api/v2/geologic_units/map?lat=" + encodeURIComponent(latlng.lat) + "&lng=" + encodeURIComponent(latlng.lng);
         const res = await fetch(url, { signal: identifyAbort.signal, headers: { Accept: "application/json" } });
@@ -702,13 +752,13 @@
         const body = await res.json();
         const unit = pickUnit((body.success && body.success.data) || []);
         if (!unit) {
-          popup.setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">No geologic unit found here.</p></div>');
+          geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">No geologic unit found here.</p></div>';
           return;
         }
-        popup.setContent(unitHtml(unit, (body.success && body.success.refs) || {}));
+        geoCardBody.innerHTML = unitHtml(unit, (body.success && body.success.refs) || {});
       } catch (err) {
         if (err && err.name === "AbortError") return;
-        popup.setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">' + esc((err && err.message) || "Identify failed") + "</p></div>");
+        geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">' + esc((err && err.message) || "Identify failed") + "</p></div>";
       }
     }
 
@@ -792,6 +842,7 @@
       detailEl.innerHTML = "";
     }
     function openDetail(p, editing) {
+      closeGeoCard();
       selectedPlace = p;
       detailEditing = !!editing;
       const kind = TYPE_LABEL[p.type] || p.type;

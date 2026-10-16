@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import type { LayerGroup, Map as LeafletMap, Marker, Polyline, TileLayer } from "leaflet";
 import { geologyPopupHtml, identifyGeologyAt } from "@/lib/geology-identify";
 import { GEOLOGY_CREDIT, GEOLOGY_TILE_URL } from "@/lib/geology-maps";
-import { HISTORICAL_CREDIT, HISTORICAL_DEFAULT_OPACITY, historicalTileUrl } from "@/lib/historical-maps";
+import {
+  HISTORICAL_CREDIT,
+  HISTORICAL_DEFAULT_OPACITY,
+  HISTORICAL_MOSAIC_DETAIL,
+  HISTORICAL_MOSAIC_FILL,
+  historicalTileUrl,
+  type HistoricalMosaicRule,
+} from "@/lib/historical-maps";
 import { KIND_LABEL, LAKE_BOUNDS, LAKE_CENTER, REGION_LABELS, type Place, type PlaceKind } from "@/lib/places";
 import { formatMiles, haversineMiles } from "@/lib/utils";
 
@@ -43,8 +50,9 @@ const TILES: Record<MapLayerId, { url: string; attr: string; maxZoom: number }> 
     maxZoom: 18,
   },
   streets: {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
-    attr: "Tiles © Esri",
+    // OSM — green land / blue water lake look (matches Pages default).
+    url: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    attr: "&copy; OpenStreetMap",
     maxZoom: 19,
   },
 };
@@ -180,9 +188,11 @@ function bindPlaceMarker(
   });
 }
 
-function createHistoricalLayer(L: LeafletNS, opacity: number): TileLayer {
+function createHistoricalTile(L: LeafletNS, rule: HistoricalMosaicRule): TileLayer {
+  // Opacity stays 1 on each sheet — fade the historical pane as a whole so PNG
+  // alpha collars composite correctly between fill and detail.
   const layer = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", {
-    opacity,
+    opacity: 1,
     pane: "historical",
     attribution: HISTORICAL_CREDIT,
     minZoom: 10,
@@ -195,8 +205,21 @@ function createHistoricalLayer(L: LeafletNS, opacity: number): TileLayer {
     detectRetina: false,
     className: "lf-historical-sheet",
   });
-  layer.getTileUrl = (coords) => historicalTileUrl(coords.x, coords.y, coords.z);
+  layer.getTileUrl = (coords) => historicalTileUrl(coords.x, coords.y, coords.z, rule);
   return layer;
+}
+
+/** Stack woodland fill → 24k detail so sheet collars cannot blank the lake. */
+function createHistoricalLayer(L: LeafletNS): LayerGroup {
+  return L.layerGroup([
+    createHistoricalTile(L, HISTORICAL_MOSAIC_FILL),
+    createHistoricalTile(L, HISTORICAL_MOSAIC_DETAIL),
+  ]);
+}
+
+function setHistoricalOpacity(map: LeafletMap, opacity: number) {
+  const pane = map.getPane("historical");
+  if (pane) pane.style.opacity = String(opacity);
 }
 
 function createLabelLayers(L: LeafletNS): { places: TileLayer; streets: TileLayer } {
@@ -246,7 +269,7 @@ export function LakeMap({
   const markerGroupRef = useRef<LayerGroup | null>(null);
   const regionGroupRef = useRef<LayerGroup | null>(null);
   const baseLayerRef = useRef<TileLayer | null>(null);
-  const histLayerRef = useRef<TileLayer | null>(null);
+  const histLayerRef = useRef<LayerGroup | null>(null);
   const geoLayerRef = useRef<TileLayer | null>(null);
   const placeLabelRef = useRef<TileLayer | null>(null);
   const streetLabelRef = useRef<TileLayer | null>(null);
@@ -317,7 +340,8 @@ export function LakeMap({
       labelsPane.style.zIndex = "450";
       labelsPane.style.pointerEvents = "none";
 
-      const spec = TILES.satellite;
+      const spec = TILES.streets;
+      baseLayerIdRef.current = "streets";
       baseLayerRef.current = L.tileLayer(spec.url, {
         attribution: spec.attr,
         maxZoom: spec.maxZoom,
@@ -329,7 +353,8 @@ export function LakeMap({
       const regions = L.layerGroup().addTo(map);
       regionGroupRef.current = regions;
 
-      histLayerRef.current = createHistoricalLayer(L, HISTORICAL_DEFAULT_OPACITY);
+      histLayerRef.current = createHistoricalLayer(L);
+      setHistoricalOpacity(map, HISTORICAL_DEFAULT_OPACITY);
       geoLayerRef.current = createGeologyLayer(L, 0.55);
       const labelLayers = createLabelLayers(L);
       placeLabelRef.current = labelLayers.places;
@@ -430,7 +455,13 @@ export function LakeMap({
           identifyAbortRef.current?.abort();
           const ac = new AbortController();
           identifyAbortRef.current = ac;
-          const loading = L.popup({ maxWidth: 320, className: "lf-geo-popup-wrap" })
+          const loading = L.popup({
+            maxWidth: 320,
+            className: "lf-geo-popup-wrap",
+            autoPan: true,
+            autoPanPaddingTopLeft: [16, 96],
+            autoPanPaddingBottomRight: [16, 120],
+          })
             .setLatLng(e.latlng)
             .setContent('<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up bedrock…</p></div>')
             .openOn(map);
@@ -554,7 +585,7 @@ export function LakeMap({
     const map = mapRef.current;
     const hist = histLayerRef.current;
     if (!map || !hist) return;
-    hist.setOpacity(histOpacity);
+    setHistoricalOpacity(map, histOpacity);
     if (historical) {
       if (!map.hasLayer(hist)) hist.addTo(map);
     } else if (map.hasLayer(hist)) {
