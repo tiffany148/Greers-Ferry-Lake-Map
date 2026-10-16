@@ -1,17 +1,15 @@
 /**
  * Historical USGS topographic overlay for Greers Ferry Lake.
  *
- * User preference: the green woodland / blue-water 7.5′ style (Greers Ferry 1973
- * and neighbors) across the whole lake — it labels Stark and reads clearer than
- * the beige Mountain View 125k reprints. Streets / Satellite / Topo stay the
- * main basemap; this stack is opt-in only.
+ * Before the dam uses the Mountain View 1:125,000 sheet (1949 reprint of the
+ * 1894 survey) — the map that prints Stark, AR in red ink on the sheet itself.
+ * Streets / Satellite / Topo stay the main basemap; this stack is opt-in only.
  *
- * Coverage is two Leaflet tile layers (not one mosaic) so transparent sheet
- * collars cannot blank the lake:
- *   1. Fill — woodland-tint 100k–250k (overview / collar backdrop)
- *   2. Detail — woodland-tint 24k quads 1970–1982 (Greers Ferry, Fairfield Bay, …)
+ * Coverage is two Leaflet tile layers so transparent sheet collars cannot blank
+ * the lake:
+ *   1. Fill — Batesville 125k (same classic beige style) east of the Mountain View neatline
+ *   2. Mountain View 125k (Imprint ≥ 1930, prefer 1949) — Stark + pre-lake valley
  *
- * Beige 125k Mountain View / Batesville sheets (Woodland_Tint = N) are excluded.
  * Tiles use png32 + transparent so collars are real alpha. Opacity is applied
  * on the historical pane (not per layer) so those collars composite.
  */
@@ -29,31 +27,32 @@ export type HistoricalMosaicRule = {
 };
 
 /**
- * Continuous woodland-tint backdrop for overview zooms and sheet collars.
- * 100k Mountain View / Searcy / Batesville + 250k Russellville / Memphis.
+ * Batesville 125k — same classic beige style as Mountain View, covering the
+ * east lake / dam side of the neatline so green woodland 250k sheets do not
+ * create a beige/green split under the overlay.
  */
 export const HISTORICAL_MOSAIC_FILL: HistoricalMosaicRule = {
   mosaicMethod: "esriMosaicAttribute",
   mosaicOperation: "MT_FIRST",
   where:
-    "Woodland_Tint = 'Y' AND Map_Scale >= 100000 AND Map_Scale <= 250000 AND DateCurrent <= 1986",
-  sortField: "Map_Scale",
-  sortValue: "100000",
-  ascending: true,
+    "Map_Name = 'Batesville' AND Map_Scale = 125000 AND Imprint_Year >= 1920",
+  sortField: "Imprint_Year",
+  sortValue: "1942",
+  ascending: false,
 };
 
 /**
- * Green/blue 7.5′ quads covering the lake (Stark on Greers Ferry 1973).
- * Prefer earliest DateCurrent so 1973 sheets win over later photorevisions.
+ * Mountain View 125k — the sheet that labels Stark in red.
+ * Prefer newest imprint so the 1949 reprint wins over earlier reprints.
  */
 export const HISTORICAL_MOSAIC_DETAIL: HistoricalMosaicRule = {
   mosaicMethod: "esriMosaicAttribute",
   mosaicOperation: "MT_FIRST",
   where:
-    "Woodland_Tint = 'Y' AND Map_Scale = 24000 AND DateCurrent >= 1970 AND DateCurrent <= 1982",
-  sortField: "DateCurrent",
-  sortValue: "1973",
-  ascending: true,
+    "Map_Name = 'Mountain View' AND Map_Scale = 125000 AND Imprint_Year >= 1930",
+  sortField: "Imprint_Year",
+  sortValue: "1949",
+  ascending: false,
 };
 
 /** @deprecated alias — prefer fill + detail stack. */
@@ -64,21 +63,6 @@ export const HISTORICAL_MOSAIC_RULE = HISTORICAL_MOSAIC_DETAIL;
 
 export const HISTORICAL_CREDIT = "USGS Historical Topographic Maps";
 export const HISTORICAL_DEFAULT_OPACITY = 0.78;
-
-/**
- * Ground height (meters) for red USGS-style town names (e.g. Stark).
- * Sized so ~z14 matches other topo labels; scales with zoom so the label
- * stays the same size *on the map* as printed sheet names (not fixed CSS px).
- */
-export const HIST_PRINT_HEIGHT_M = 85;
-
-/** Screen font-size (px) for a hist-print label at lat/zoom. */
-export function histPrintFontPx(lat: number, zoom: number): number {
-  const mpp = (156543.03392 * Math.cos((lat * Math.PI) / 180)) / 2 ** zoom;
-  const px = HIST_PRINT_HEIGHT_M / mpp;
-  // Cap so high zooms stay in line with sheet town names (not huge vs streets).
-  return Math.max(9, Math.min(26, Math.round(px * 10) / 10));
-}
 
 /** Web Mercator half-circumference in meters (EPSG:3857). */
 const WEB_MERCATOR_HALF = 20037508.342789244;
