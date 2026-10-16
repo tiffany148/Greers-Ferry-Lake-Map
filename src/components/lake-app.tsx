@@ -754,6 +754,12 @@ export function LakeApp({ initialShared = [] }: { initialShared?: Place[] }) {
         </div>
       </aside>
 
+      {geology && !addMode ? (
+        <p className="pointer-events-none absolute inset-x-3 bottom-[max(5.5rem,env(safe-area-inset-bottom))] z-20 rounded-md bg-surface/95 px-3 py-2 text-center text-xs text-muted shadow-panel md:inset-x-auto md:right-4 md:bottom-4 md:max-w-xs md:text-left">
+          Geology on — tap the map for rock type &amp; age
+        </p>
+      ) : null}
+
       {about ? (
         <AboutCard
           onClose={() => setAbout(false)}

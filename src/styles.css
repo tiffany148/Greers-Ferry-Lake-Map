@@ -263,6 +263,11 @@
   mix-blend-mode: multiply;
 }
 
+/* Keep identify popups readable above map chrome inside the map stacking context. */
+.leaflet-container .leaflet-popup-pane {
+  z-index: 700;
+}
+
 .lf-geo-popup-wrap .leaflet-popup-content-wrapper {
   background: color-mix(in oklab, var(--color-surface) 96%, transparent);
   color: var(--color-fg);
