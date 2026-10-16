@@ -7,6 +7,7 @@ import {
   HISTORICAL_DEFAULT_OPACITY,
   HISTORICAL_MOSAIC_DETAIL,
   HISTORICAL_MOSAIC_FILL,
+  histPrintFontPx,
   historicalTileUrl,
   type HistoricalMosaicRule,
 } from "@/lib/historical-maps";
@@ -174,6 +175,11 @@ function paintMarker(
   root.classList.toggle("is-selected", selected);
   root.classList.toggle("is-labeled", show);
   root.classList.toggle("is-hist-print", histPrint);
+  const nameEl = root.querySelector(".lf-name") as HTMLElement | null;
+  if (nameEl) {
+    // Scale with map zoom so Stark stays sized like printed topo names.
+    nameEl.style.fontSize = histPrint ? `${histPrintFontPx(place.lat, zoom)}px` : "";
+  }
   mk.setZIndexOffset(selected ? 1000 : histPrint ? 800 : place.importance * 10);
 }
 
@@ -334,7 +340,9 @@ export function LakeMap({
         attributionControl: true,
         fadeAnimation: true,
         zoomAnimation: true,
-        markerZoomAnimation: false,
+        // Animate markers with zoom so hist-print names (Stark) scale with
+        // the topo sheet labels; font-size is updated on zoomend to match.
+        markerZoomAnimation: true,
         maxBounds: L.latLngBounds(LAKE_BOUNDS).pad(0.18),
         maxBoundsViscosity: 0.7,
       });
@@ -350,11 +358,6 @@ export function LakeMap({
       const labelsPane = map.createPane("labels");
       labelsPane.style.zIndex = "450";
       labelsPane.style.pointerEvents = "none";
-      // Hist-print names (Stark): fixed screen size — not zoom-animated.
-      const histPrintPane = map.createPane("histPrint");
-      histPrintPane.style.zIndex = "460";
-      histPrintPane.style.pointerEvents = "none";
-      L.DomUtil.removeClass(histPrintPane, "leaflet-zoom-animated");
 
       const spec = TILES.streets;
       baseLayerIdRef.current = "streets";
@@ -392,7 +395,6 @@ export function LakeMap({
           keyboard: true,
           title: place.name,
           riseOnHover: true,
-          pane: place.histPrint ? "histPrint" : "markerPane",
         });
         bindPlaceMarker(L, m, place.id, addModeRef, measureRef, onSelectRef, onPickPointRef);
         markersRef.current.set(place.id, m);
@@ -550,7 +552,6 @@ export function LakeMap({
         keyboard: true,
         title: place.name,
         riseOnHover: true,
-        pane: place.histPrint ? "histPrint" : "markerPane",
       });
       bindPlaceMarker(L, m, place.id, addModeRef, measureRef, onSelectRef, onPickPointRef);
       markersRef.current.set(place.id, m);

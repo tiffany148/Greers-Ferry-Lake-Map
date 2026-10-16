@@ -372,8 +372,8 @@
 }
 
 /* USGS historic-topo town name: red print lettering (e.g. Stark).
-   Fixed 11px screen size — matches .lf-name; histPrint pane is not
-   zoom-animated so Leaflet cannot scale the text while zooming. */
+   Font-size is set in JS from map zoom (geographic scale) so it stays
+   sized like printed topo labels when zooming — not a fixed CSS px. */
 .lf-marker.is-hist-print {
   width: 0;
   height: 0;
@@ -392,7 +392,6 @@
   margin: 0;
   font-family: "Times New Roman", "Liberation Serif", "Noto Serif", Georgia, serif;
   font-style: italic;
-  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
   color: #c41e3a;
