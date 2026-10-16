@@ -635,11 +635,11 @@
     // Red USGS-style print label for Stark (shown only with Before the dam).
     // Font size tracks map zoom so it stays sized like other printed topo names.
     const STARK_LAT = 35.56748, STARK_LNG = -92.17631;
-    const HIST_PRINT_HEIGHT_M = 90;
+    const HIST_PRINT_HEIGHT_M = 85;
     function histPrintFontPx(lat, zoom) {
       const mpp = (156543.03392 * Math.cos(lat * Math.PI / 180)) / Math.pow(2, zoom);
       const px = HIST_PRINT_HEIGHT_M / mpp;
-      return Math.max(9, Math.min(56, Math.round(px * 10) / 10));
+      return Math.max(9, Math.min(26, Math.round(px * 10) / 10));
     }
     const starkPrint = L.marker([STARK_LAT, STARK_LNG], {
       interactive: false, keyboard: false, zIndexOffset: 800,
