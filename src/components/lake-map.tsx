@@ -159,13 +159,22 @@ function pinIcon(L: LeafletNS, html: string) {
   });
 }
 
-function paintMarker(mk: Marker, place: Place, selected: boolean, zoom: number) {
+function paintMarker(
+  mk: Marker,
+  place: Place,
+  selected: boolean,
+  zoom: number,
+  historical = false,
+) {
   const root = mk.getElement()?.querySelector(".lf-marker");
   if (!root) return;
-  const show = selected || labeled(place, zoom);
+  const histPrint = Boolean(place.histPrint && historical);
+  // Red print labels stay visible whenever the historical overlay is on.
+  const show = selected || histPrint || labeled(place, zoom);
   root.classList.toggle("is-selected", selected);
   root.classList.toggle("is-labeled", show);
-  mk.setZIndexOffset(selected ? 1000 : place.importance * 10);
+  root.classList.toggle("is-hist-print", histPrint);
+  mk.setZIndexOffset(selected ? 1000 : histPrint ? 800 : place.importance * 10);
 }
 
 function bindPlaceMarker(
@@ -287,6 +296,7 @@ export function LakeMap({
   const addKindRef = useRef(addKind);
   const placesRef = useRef(places);
   const geologyRef = useRef(geology);
+  const historicalRef = useRef(historical);
   const identifyAbortRef = useRef<AbortController | null>(null);
   const [mapReady, setMapReady] = useState(false);
 
@@ -300,6 +310,7 @@ export function LakeMap({
   addKindRef.current = addKind;
   placesRef.current = places;
   geologyRef.current = geology;
+  historicalRef.current = historical;
   baseLayerIdRef.current = layer;
 
   useEffect(() => {
@@ -410,7 +421,7 @@ export function LakeMap({
         for (const place of placesRef.current) {
           const mk = markersRef.current.get(place.id);
           if (!mk) continue;
-          paintMarker(mk, place, selectedRef.current === place.id, z);
+          paintMarker(mk, place, selectedRef.current === place.id, z, historicalRef.current);
         }
       };
       map.on("zoomend", syncChrome);
@@ -537,7 +548,9 @@ export function LakeMap({
       bindPlaceMarker(L, m, place.id, addModeRef, measureRef, onSelectRef, onPickPointRef);
       markersRef.current.set(place.id, m);
       if (visibleRef.current.has(place.id)) m.addTo(group);
-      requestAnimationFrame(() => paintMarker(m, place, selectedRef.current === place.id, z));
+      requestAnimationFrame(() =>
+        paintMarker(m, place, selectedRef.current === place.id, z, historicalRef.current),
+      );
     }
   }, [places, mapReady]);
 
@@ -591,6 +604,13 @@ export function LakeMap({
     } else if (map.hasLayer(hist)) {
       map.removeLayer(hist);
     }
+    // Refresh hist-print labels (e.g. red Stark) when the overlay toggles.
+    const z = map.getZoom();
+    for (const place of placesRef.current) {
+      const mk = markersRef.current.get(place.id);
+      if (!mk) continue;
+      paintMarker(mk, place, selectedRef.current === place.id, z, historical);
+    }
   }, [historical, histOpacity, mapReady]);
 
   useEffect(() => {
@@ -625,7 +645,7 @@ export function LakeMap({
     for (const place of placesRef.current) {
       const mk = markersRef.current.get(place.id);
       if (!mk) continue;
-      paintMarker(mk, place, selectedId === place.id, z);
+      paintMarker(mk, place, selectedId === place.id, z, historicalRef.current);
     }
   }, [selectedId]);
 

@@ -371,6 +371,41 @@
   opacity: 1;
 }
 
+/* USGS historic-topo town name: red print lettering on the map (e.g. Stark). */
+.lf-marker.is-hist-print {
+  width: 0;
+  height: 0;
+  overflow: visible;
+}
+
+.lf-marker.is-hist-print .lf-pin {
+  display: none;
+}
+
+.lf-marker.is-hist-print .lf-name {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 0;
+  margin: 0;
+  font-family: "Times New Roman", "Liberation Serif", "Noto Serif", Georgia, serif;
+  font-style: italic;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #c41e3a;
+  background: none;
+  border-radius: 0;
+  text-shadow:
+    0 0 1px rgb(255 255 255 / 0.95),
+    0 0 2px rgb(255 255 255 / 0.7),
+    1px 0 0 rgb(255 250 240 / 0.55),
+    -1px 0 0 rgb(255 250 240 / 0.55);
+  max-width: none;
+  overflow: visible;
+  opacity: 1;
+}
+
 .lf-region {
   width: 160px;
   text-align: center;
