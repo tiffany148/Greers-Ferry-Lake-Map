@@ -152,6 +152,27 @@
   .par-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));z-index:1200;background:#0e2a3aee;color:#fff;border:1px solid #1e4a5f;border-radius:999px;padding:6px 12px;font-size:12px;display:none;pointer-events:none;white-space:nowrap}
   .par-note.show{display:block}
   .gfl-north svg{transition:transform .15s}
+
+  .srch{position:relative;margin-top:8px}
+  .srch form{display:flex;gap:6px;margin:0}
+  .srch input{flex:1;min-width:0;box-sizing:border-box;background:var(--panel);color:var(--text);border:1px solid #1f6276;border-radius:10px;padding:8px 30px 8px 10px;font-size:16px}
+  .srch input::placeholder{color:var(--muted)}
+  .srch .sx{position:absolute;right:62px;top:3px;width:30px;height:30px;border:0;background:none;color:var(--muted);font-size:20px;display:none}
+  .srch.has .sx{display:block}
+  .srch .sgo{flex:0 0 auto}
+  .srch-res{display:none;position:absolute;left:0;right:0;top:100%;margin-top:4px;max-height:50vh;overflow-y:auto;background:#0b3d4d;border:1px solid #1f6276;border-radius:10px;box-shadow:0 6px 18px #0009;z-index:1300}
+  .srch-res.show{display:block}
+  header.srch-open{z-index:1300}
+  .srch-res{max-height:min(60vh,calc(100vh - 190px))}
+  .srch-res .sh{padding:6px 10px 2px;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  .srch-res .si{display:flex;gap:8px;align-items:center;width:100%;text-align:left;background:none;border:0;border-top:1px solid #174f63;color:var(--text);padding:9px 10px;font-size:13px}
+  .srch-res .si:first-of-type{border-top:0}
+  .srch-res .si .t{flex:0 0 auto;font-size:10px;padding:2px 6px;border-radius:999px;background:#08323c;color:#7ed0c8;border:1px solid #1f6276;white-space:nowrap}
+  .srch-res .si .n{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .srch-res .si small{display:block;color:var(--muted);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .srch-res .sm{padding:10px;font-size:12px;color:var(--muted)}
+  .srch-pop{display:flex;align-items:center;gap:8px}
+  .srch-pop button{border:1px solid #1f6276;background:#08323c;color:#f4f7f8;border-radius:999px;width:24px;height:24px;font-size:15px;line-height:1;padding:0}
 </style>
 </head>
 <body>
@@ -174,6 +195,14 @@
       <button class="tool" id="locate">My location</button>
       <button class="tool" id="addPin">Add pin</button>
       <button class="tool" id="toggleSheet">Hide list</button>
+    </div>
+    <div class="srch" id="srch">
+      <form id="srchForm" autocomplete="off" role="search">
+        <input id="srchIn" type="search" enterkeyhint="search" placeholder="Search pins, towns, places" aria-label="Search pins, towns and places" autocapitalize="off" autocorrect="off" spellcheck="false" />
+        <button type="button" class="sx" id="srchX" aria-label="Clear search">×</button>
+        <button type="submit" class="tool sgo">Search</button>
+      </form>
+      <div class="srch-res" id="srchRes" role="listbox"></div>
     </div>
     <div class="layers" id="basemap">
       <button class="tool on" data-base="streets">Streets</button>
@@ -1197,6 +1226,129 @@
       const cur = states.find((s) => sheet.classList.contains(s)) || "mid";
       setSheet(states[(states.indexOf(cur) + 1) % states.length]);
     });
-  </script>
+  
+    /* ===== Search: own pins (instant, offline) + Nominatim places (on Enter/Search tap only) ===== */
+    (function () {
+      const box = document.getElementById("srch"), inp = document.getElementById("srchIn"),
+            res = document.getElementById("srchRes"), form = document.getElementById("srchForm"),
+            xb = document.getElementById("srchX"), hdr = document.querySelector("header");
+      L.DomEvent.disableClickPropagation(box); L.DomEvent.disableScrollPropagation(res);
+      // keep north/3D/banner clear of the (taller) header
+      function layout() {
+        const b = hdr.getBoundingClientRect().bottom;
+        const n = document.querySelector(".gfl-north-wrap"), t = document.getElementById("btn3d"), bn = document.getElementById("banner");
+        if (n) n.style.top = (b + 10) + "px";
+        if (t) t.style.top = (b + 50) + "px";
+        if (bn) bn.style.top = (b + 6) + "px";
+      }
+      layout(); addEventListener("resize", layout); addEventListener("orientationchange", layout);
+      if (window.ResizeObserver) new ResizeObserver(layout).observe(hdr);
+
+      let tempMk = null, lastReq = 0, token = 0, cache = {}, pinHits = [], placeHits = null, status = "";
+      const NOM = "https://nominatim.openstreetmap.org/search";
+      const VIEWBOX = "-92.75,35.95,-91.55,35.15"; // left,top,right,bottom around the lake / north-central AR
+      const e = (x) => esc(x);
+
+      function pinMatches(q) {
+        q = q.toLowerCase();
+        return allPlaces().filter((p) => [p.name, p.note, p.address, p.value, p.type, TYPE_LABEL[p.type], p.custom ? "my pin" : ""]
+          .some((f) => f && String(f).toLowerCase().includes(q)))
+          .sort((a, b) => (String(b.name).toLowerCase().startsWith(q) - String(a.name).toLowerCase().startsWith(q)) || (b.custom - a.custom))
+          .slice(0, 5);
+      }
+      function placeType(r) {
+        const t = r.addresstype || r.type || r.category || "place";
+        return String(t).replace(/_/g, " ");
+      }
+      function paint() {
+        let h = "";
+        if (pinHits.length) {
+          h += '<div class="sh">Map pins</div>' + pinHits.map((p, i) =>
+            `<button type="button" class="si" data-pin="${i}"><span class="t">${e(TYPE_LABEL[p.type] || p.type)}</span><span class="n">${e(p.name)}${p.note ? "<small>" + e(p.note) + "</small>" : ""}</span></button>`).join("");
+        }
+        if (placeHits && placeHits.length) {
+          h += '<div class="sh">Towns &amp; places</div>' + placeHits.map((r, i) => {
+            const nm = r.name || r.display_name.split(",")[0];
+            return `<button type="button" class="si" data-pl="${i}"><span class="t">${e(placeType(r))}</span><span class="n">${e(nm)}<small>${e(r.display_name)}</small></span></button>`;
+          }).join("");
+        }
+        if (status) h += `<div class="sm">${e(status)}</div>`;
+        res.innerHTML = h;
+        res.classList.toggle("show", !!h); hdr.classList.toggle("srch-open", !!h);
+      }
+      function onType() {
+        const q = inp.value.trim();
+        box.classList.toggle("has", !!inp.value);
+        placeHits = null; status = "";
+        pinHits = q.length >= 2 ? pinMatches(q) : [];
+        if (q.length >= 2) status = "Press Search or Enter to look up towns & places";
+        paint();
+      }
+      async function lookup() {
+        const q = inp.value.trim();
+        if (q.length < 2) return;
+        pinHits = pinMatches(q);
+        const key = q.toLowerCase();
+        if (cache[key]) { placeHits = cache[key]; status = placeHits.length ? "" : "No towns or places found"; paint(); return; }
+        const my = ++token;
+        const wait = Math.max(0, 1100 - (Date.now() - lastReq)); // Nominatim policy: max 1 req/sec
+        placeHits = null; status = "Searching places…"; paint();
+        if (wait) await new Promise((r) => setTimeout(r, wait));
+        if (my !== token) return;
+        lastReq = Date.now();
+        const url = NOM + "?format=jsonv2&limit=8&addressdetails=0&countrycodes=us&bounded=0&viewbox=" + VIEWBOX + "&q=" + encodeURIComponent(q);
+        try {
+          const r = await fetch(url, { headers: { "Accept": "application/json" }, referrerPolicy: "strict-origin-when-cross-origin" });
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          let j = await r.json();
+          if (my !== token) return;
+          // prefer nearby: stable-sort by distance to lake center (Nominatim already favors the viewbox)
+          const c = L.latLng(35.53, -92.17);
+          j.forEach((x, i) => { x._i = i; x._d = c.distanceTo([+x.lat, +x.lon]) / 1000; });
+          j.sort((a, b) => ((a._d > 150) - (b._d > 150)) || (a._i - b._i));
+          cache[key] = j; placeHits = j; status = j.length ? "" : "No towns or places found";
+        } catch (err) {
+          placeHits = []; status = "Place search unavailable right now. Pins still work.";
+        }
+        paint();
+      }
+      function clearTemp() { if (tempMk) { map.removeLayer(tempMk); tempMk = null; } }
+      function dropTemp(lat, lng, title, sub) {
+        clearTemp();
+        tempMk = L.marker([lat, lng], { keyboard: false }).addTo(map);
+        const d = document.createElement("div");
+        d.className = "srch-pop";
+        d.innerHTML = `<div><strong>${e(title)}</strong>${sub ? `<div style="font-size:11px;color:#9fc3cc;max-width:200px">${e(sub)}</div>` : ""}<div style="margin-top:4px"><a href="https://maps.apple.com/?daddr=${lat},${lng}">Directions</a></div></div><button type="button" aria-label="Remove marker">×</button>`;
+        d.querySelector("button").addEventListener("click", clearTemp);
+        tempMk.bindPopup(d).openPopup();
+        tempMk.on("popupclose", () => {}); 
+      }
+      function close() { res.classList.remove("show"); hdr.classList.remove("srch-open"); inp.blur(); }
+      res.addEventListener("click", (ev) => {
+        const b = ev.target.closest(".si"); if (!b) return;
+        if (b.dataset.pin != null) {
+          const p = pinHits[+b.dataset.pin];
+          clearTemp(); map.setView([p.lat, p.lng], Math.max(map.getZoom(), 15));
+          openDetail(p);
+          const mk = markers.find((m) => m.place === p || (m.place.name === p.name && m.place.lat === p.lat));
+          if (mk) mk.openPopup(); else dropTemp(p.lat, p.lng, p.name, TYPE_LABEL[p.type] || "");
+        } else {
+          const r = placeHits[+b.dataset.pl], lat = +r.lat, lng = +r.lon;
+          if (r.boundingbox && r.boundingbox.length === 4) {
+            const bb = r.boundingbox.map(Number);
+            map.fitBounds([[bb[0], bb[2]], [bb[1], bb[3]]], { maxZoom: 15, padding: [30, 30] });
+          } else map.setView([lat, lng], 14);
+          dropTemp(lat, lng, r.name || r.display_name.split(",")[0], r.display_name);
+        }
+        close();
+      });
+      form.addEventListener("submit", (ev) => { ev.preventDefault(); lookup(); inp.blur(); });
+      inp.addEventListener("input", onType);
+      inp.addEventListener("focus", () => { if (res.innerHTML) { res.classList.add("show"); hdr.classList.add("srch-open"); } });
+      xb.addEventListener("click", () => { inp.value = ""; token++; onType(); clearTemp(); inp.focus(); });
+      document.addEventListener("pointerdown", (ev) => { if (!box.contains(ev.target)) res.classList.remove("show"); hdr.classList.remove("srch-open"); });
+      inp.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { res.classList.remove("show"); hdr.classList.remove("srch-open"); } });
+    })();
+</script>
 </body>
 </html>
