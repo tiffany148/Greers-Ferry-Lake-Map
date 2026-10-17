@@ -47,6 +47,11 @@
     .fade-wrap.show { display: flex; }
     .fade-wrap input[type="range"] { width: 72px; accent-color: var(--accent); }
     .fade-wrap .pct { min-width: 2.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    .geo-loading { position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:1200; display:flex; align-items:center; gap:8px; background:#0e2a3aee; color:#fff; border:1px solid #1e4a5f; border-radius:999px; padding:6px 12px; font-size:12px; box-shadow:0 4px 14px #0007; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .3s, visibility 0s linear .3s; white-space:nowrap; }
+    .geo-loading.on { opacity:1; visibility:visible; transition:opacity .3s, visibility 0s; }
+    .geo-loading .spin { width:12px; height:12px; border-radius:50%; border:2px solid #7bdff2; border-right-color:transparent; animation:gflspin .8s linear infinite; }
+    @keyframes gflspin { to { transform:rotate(360deg); } }
+    .geo-card .lf-geo-badge{display:inline-block;margin-left:6px;font-size:11px;color:var(--muted)}
     .geo-hint {
       display: none; position: absolute; left: 10px; right: 10px; z-index: 1050;
       /* Sit above the pin sheet — never under the STACK header (that clipped identify UI). */
@@ -141,7 +146,13 @@
     .leaflet-popup-content-wrapper { background: #0b3d4d; color: #f4f7f8; border-radius: 12px; }
     .leaflet-popup-tip { background: #0b3d4d; }
     .leaflet-popup-content a { color: #7ed0c8; }
-  </style>
+    .gfl-north{display:flex;align-items:center;justify-content:center;width:30px;height:30px;background:#fff}
+  .gfl-north-wrap{position:fixed!important;right:12px;top:118px;z-index:1200;margin:0!important}
+  .gfl-3d{position:fixed;right:12px;top:158px;z-index:1200;width:30px;height:30px;border-radius:4px;background:#fff;color:#0b3d4d;font:700 12px/30px system-ui,sans-serif;text-align:center;text-decoration:none;box-shadow:0 1px 5px rgba(0,0,0,.65)}
+  .par-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));z-index:1200;background:#0e2a3aee;color:#fff;border:1px solid #1e4a5f;border-radius:999px;padding:6px 12px;font-size:12px;display:none;pointer-events:none;white-space:nowrap}
+  .par-note.show{display:block}
+  .gfl-north svg{transition:transform .15s}
+</style>
 </head>
 <body>
   <div id="map"></div>
@@ -183,8 +194,17 @@
         <input type="range" id="geoOpacity" min="0.1" max="0.9" step="0.02" value="0.55" aria-label="Geology opacity" />
         <span class="pct" id="geoPct">55</span>
       </label>
+      <button class="tool" data-overlay="parcels" aria-pressed="false">Parcels &amp; owners</button>
+      <label class="fade-wrap" id="parFade">
+        Opacity
+        <input type="range" id="parOpacity" min="0.2" max="1" step="0.02" value="0.9" aria-label="Parcels opacity" />
+        <span class="pct" id="parPct">90</span>
+      </label>
     </div>
   </header>
+  <a class="gfl-3d" id="btn3d" href="3d.html" title="View in 3D" aria-label="View in 3D">3D</a>
+  <div class="par-note" id="parNote">Zoom in closer to see parcels · Not a legal boundary</div>
+  <div class="geo-loading" id="geoLoading" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span><span>Loading geology…</span></div>
   <div class="geo-hint" id="geoHint">Geology on — tap the map for rock type &amp; age</div>
   <div class="geo-card" id="geoCard" role="dialog" aria-label="Geology identify">
     <div class="geo-card-top">
@@ -219,13 +239,15 @@
         Use <b>Export / Import my pins</b> to move pins to another phone. Cross-device sign-in sync is not on this Pages build.
         Official map pins can be <b>removed from your map</b> (hidden on this phone only — restore via the quiet Restore hidden control above when needed).
         <b>Streets</b> is the default lake map (green land / blue water). Satellite and Topo are alternatives. <b>Before the dam</b> and <b>Geology</b> are optional stack overlays — each has its own opacity slider.
-        With Geology on, tap the map for rock type, age, and a short explanation (Macrostrat / USGS).
+        With Geology on, tap the map for unit name, age, and material (USGS National Geologic Map).
         Before the dam uses the USGS historic topographic maps (via Esri) — Stark prints in red on the map itself. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
   </section>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
+  <script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"></script>
   <script>
     const builtIn = [
       { name: "Unnamed spot (35.5719, -92.2170)", type: "cove", lat: 35.571854, lng: -92.216952, note: "From Greers Ferry Lake cove names map." },
@@ -582,14 +604,39 @@
 
     const map = L.map("map", {
       zoomControl: true,
+      rotate: true, bearing: 0, touchRotate: true, rotateControl: false,
     }).setView([35.53, -92.17], 11);
     window.__gflMap = map;
-    map.createPane("historical");
+    map.createPane("historical", map.getPane("rotatePane") || map.getPane("mapPane"));
     map.getPane("historical").style.zIndex = 350;
-    map.createPane("geology");
+    map.createPane("geology", map.getPane("rotatePane") || map.getPane("mapPane"));
     map.getPane("geology").style.zIndex = 360;
-    map.createPane("labels");
+    map.createPane("labels", map.getPane("rotatePane") || map.getPane("mapPane"));
     map.getPane("labels").style.zIndex = 450;
+    map.createPane("parcels", map.getPane("rotatePane") || map.getPane("mapPane"));
+    map.getPane("parcels").style.zIndex = 420;
+    document.getElementById("btn3d").addEventListener("click", function (e) {
+      e.preventDefault();
+      const c = map.getCenter();
+      location.href = "3d.html#" + map.getZoom().toFixed(2) + "/" + c.lat.toFixed(5) + "/" + c.lng.toFixed(5);
+    });
+
+    /* North / reset-rotation button (touch: two-finger twist rotates; desktop: shift+drag or this button). */
+    const NorthCtl = L.Control.extend({
+      options: { position: "topleft" },
+      onAdd: function () {
+        const a = L.DomUtil.create("a", "gfl-north");
+        a.href = "#"; a.title = "Reset north"; a.setAttribute("role", "button"); a.setAttribute("aria-label", "Reset north");
+        a.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2l5 10h-10z" fill="#d33"/><path d="M12 22l-5-10h10z" fill="#888"/></svg>';
+        const c = L.DomUtil.create("div", "leaflet-bar leaflet-control gfl-north-wrap");
+        c.appendChild(a);
+        L.DomEvent.disableClickPropagation(c);
+        L.DomEvent.on(a, "click", function (e) { L.DomEvent.preventDefault(e); map.setBearing(0); });
+        map.on("rotate", function () { a.firstChild.style.transform = "rotate(" + (-map.getBearing()) + "deg)"; });
+        return c;
+      }
+    });
+    new NorthCtl().addTo(map);
 
     const basemaps = {
       streets: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }),
@@ -616,9 +663,88 @@
       map.getPane("historical").style.opacity = String(o);
     }
 
-    const geoLayer = L.tileLayer("https://tiles.macrostrat.org/carto/{z}/{x}/{y}.png", {
-      maxZoom: 18, opacity: 0.55, pane: "geology", attribution: "Geology © Macrostrat / USGS"
-    });
+    // USGS national geology (Earth surface), same source as the Explorer map.
+    const GEO_UNITS = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/National_Earth_Surface_v2/FeatureServer/6";
+    const GEO_DMU = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/National_Earth_Surface_v2/FeatureServer/8";
+    const geoLoadingEl = document.getElementById("geoLoading");
+    let geoColors = {}, geoDmu = {}, geoInfoP = null, geoDictP = null;
+    function geoInfo() {
+      if (!geoInfoP) geoInfoP = fetch(GEO_UNITS + "?f=json").then((r) => r.json()).catch((e) => { geoInfoP = null; throw e; });
+      return geoInfoP;
+    }
+    function rgbHex(c) {
+      if (!c || c.length < 3) return "#88aacc";
+      const h = (n) => ("0" + Math.max(0, Math.min(255, n | 0)).toString(16)).slice(-2);
+      return "#" + h(c[0]) + h(c[1]) + h(c[2]);
+    }
+    function geoDict() {
+      if (!geoDictP) {
+        geoDictP = Promise.all([
+          geoInfo(),
+          fetch(GEO_DMU + "/query?where=1%3D1&outFields=MapUnit,Name,FullName,Age,Description,GeoMaterial,Symbol&returnGeometry=false&resultRecordCount=2000&f=json").then((r) => r.json())
+        ]).then(([info, dmuJson]) => {
+          const rend = ((info || {}).drawingInfo || {}).renderer || {};
+          (rend.uniqueValueInfos || []).forEach((i) => { if (i.value != null && i.symbol && i.symbol.color) geoColors[String(i.value)] = rgbHex(i.symbol.color); });
+          ((dmuJson && dmuJson.features) || []).forEach((f) => { const a = f.attributes || {}; if (a.MapUnit) geoDmu[String(a.MapUnit)] = a; });
+        }).catch((e) => { geoDictP = null; throw e; });
+      }
+      return geoDictP;
+    }
+    function geoStyle(f) {
+      const mu = String((f.properties && (f.properties.MapUnit || f.properties.mapunit)) || "");
+      return { color: "#1e3a4c", weight: 0.4, fillColor: geoColors[mu] || "#80b3ff", fillOpacity: 0.55, opacity: 0.9 };
+    }
+    const geoPaneEl = map.getPane("geology");
+    const GeoFL = (L.esri && L.esri.FeatureLayer) ? L.esri.FeatureLayer.extend({
+      _addFeatures: function (features, coords) { this._gflZ = coords ? coords.z : 99; return L.esri.FeatureLayer.prototype._addFeatures.call(this, features, coords); },
+      createNewLayer: function (g) { const l = L.esri.FeatureLayer.prototype.createNewLayer.call(this, g); if (l) l._gflZ = this._gflZ; return l; },
+      _updateLayer: function (layer, g) {
+        if (layer._gflZ != null && this._gflZ <= layer._gflZ) return;
+        layer._gflZ = this._gflZ;
+        return L.esri.FeatureLayer.prototype._updateLayer.call(this, layer, g);
+      }
+    }) : null;
+    const geoLayer = GeoFL ? new GeoFL({
+      url: GEO_UNITS, pane: "geology",
+      renderer: L.canvas({ pane: "geology", padding: 0.5, tolerance: 3 }),
+      fields: ["OBJECTID", "MapUnit", "Label"],
+      precision: 5, simplifyFactor: 0.5, cellSize: 1024,
+      style: geoStyle,
+      interactive: false,
+      attribution: "Geology © USGS / AASG National Geologic Map"
+    }) : null;
+    if (geoLayer) {
+      geoLayer.service.metadata = function (cb, ctx) { geoInfo().then((m) => cb.call(ctx, null, m), (e) => cb.call(ctx, e)); return this; };
+      const updGeoLoading = () => geoLoadingEl.classList.toggle("on", !!(geoLayer._activeRequests > 0 && map.hasLayer(geoLayer)));
+      geoLayer.on("loading load", updGeoLoading);
+      geoLayer.on("remove", () => geoLoadingEl.classList.remove("on"));
+    }
+    // opacity slider drives the geology pane (never restyles polygons)
+    geoLayer && Object.assign(geoLayer, { setOpacity(o) { geoPaneEl.style.opacity = String(o); return this; } });
+
+    /* Parcels & owners: Arkansas GIS Office statewide cadastre (county assessor data). */
+    const PARCEL_URL = "https://gis.arkansas.gov/arcgis/rest/services/AGFC/AGFC_Cadastre_Viewer/FeatureServer/2";
+    const parcelLayer = (L.esri && L.esri.featureLayer) ? L.esri.featureLayer({
+      url: PARCEL_URL, pane: "parcels", minZoom: 15,
+      renderer: L.svg({ pane: "parcels", padding: 0.5 }),
+      fields: ["objectid", "parcelid", "ownername", "adrlabel", "adrnum", "pstrnam", "pstrtype", "adrcity", "county"],
+      precision: 6, simplifyFactor: 0.3,
+      style: function () { return { color: "#ffd24a", weight: 1.2, fill: true, fillColor: "#ffd24a", fillOpacity: 0.06 }; },
+      attribution: "Parcels: Arkansas GIS Office / county assessors"
+    }) : null;
+    if (parcelLayer) {
+      parcelLayer.bindPopup(function (layer) {
+        const p = layer.feature.properties || {};
+        const addr = p.adrlabel || [p.adrnum, p.pstrnam, p.pstrtype, p.adrcity].filter(Boolean).join(" ");
+        return '<div><b>' + esc(p.ownername || "Owner not listed") + '</b><br>Parcel ID: ' + esc(p.parcelid || "—")
+          + '<br>Address: ' + esc(addr || "—") + (p.county ? '<br>County: ' + esc(p.county) : '')
+          + '<br><small style="opacity:.75">Not a legal boundary · Arkansas GIS Office / county assessors</small></div>';
+      }, { maxWidth: 260 });
+    }
+    const parPaneEl = map.getPane("parcels");
+    let parOn = false;
+    function syncParNote() { document.getElementById("parNote").classList.toggle("show", parOn && map.getZoom() < 15); }
+    map.on("zoomend", syncParNote);
 
     let currentBase = basemaps.streets.addTo(map);
     let histOn = false;
@@ -654,6 +780,9 @@
     }
 
     function syncOverlayChrome() {
+      document.getElementById("parFade").classList.toggle("show", parOn);
+      document.getElementById("parPct").textContent = String(Math.round(Number(document.getElementById("parOpacity").value) * 100));
+      syncParNote();
       histFade.classList.toggle("show", histOn);
       geoFade.classList.toggle("show", geoOn);
       const geoCardOpen = geoCard.classList.contains("show");
@@ -671,6 +800,10 @@
       syncOverlayChrome();
     });
 
+    document.getElementById("parOpacity").addEventListener("input", () => {
+      parPaneEl.style.opacity = document.getElementById("parOpacity").value;
+      syncOverlayChrome();
+    });
     document.getElementById("basemap").addEventListener("click", (e) => {
       const btn = e.target.closest("[data-base]");
       if (!btn) return;
@@ -694,15 +827,26 @@
           setHistOpacity(Number(histOpacityEl.value));
           histLayer.addTo(map);
         } else map.removeLayer(histLayer);
+      } else if (id === "parcels") {
+        parOn = !parOn;
+        btn.classList.toggle("on", parOn);
+        btn.setAttribute("aria-pressed", parOn ? "true" : "false");
+        if (parOn) {
+          if (!parcelLayer) { alert("Parcel layer failed to load."); parOn = false; btn.classList.remove("on"); return; }
+          parPaneEl.style.opacity = document.getElementById("parOpacity").value;
+          parcelLayer.addTo(map);
+        } else if (parcelLayer) { map.removeLayer(parcelLayer); map.closePopup(); }
       } else if (id === "geo") {
         geoOn = !geoOn;
         btn.classList.toggle("on", geoOn);
         btn.setAttribute("aria-pressed", geoOn ? "true" : "false");
         if (geoOn) {
+          if (!geoLayer) { alert("Geology layer failed to load (esri-leaflet unavailable)."); geoOn = false; btn.classList.remove("on"); btn.setAttribute("aria-pressed","false"); return; }
           geoLayer.setOpacity(Number(geoOpacityEl.value));
+          geoDict().then(() => { if (geoOn) geoLayer.setStyle(geoStyle); }).catch(() => {});
           geoLayer.addTo(map);
         } else {
-          map.removeLayer(geoLayer);
+          if (geoLayer) map.removeLayer(geoLayer);
           closeGeoCard();
         }
       }
@@ -712,58 +856,38 @@
     function esc(s) {
       return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
     }
-    function tidyLith(lith) {
-      return lith.replace(/Major:\s*\{([^}]*)\}/gi, "$1").replace(/Minor:\s*\{([^}]*)\}/gi, "minor: $1").replace(/[{}]/g, "").replace(/\s+/g, " ").trim();
-    }
-    function pickUnit(units) {
-      const rank = { large: 0, medium: 1, small: 2, tiny: 3 };
-      const land = units.filter((u) => !/^(water|lake|reservoir)$/i.test((u.name || "").trim()));
-      const pool = land.length ? land : units;
-      return pool.slice().sort((a, b) => (rank[(a.scale || "").toLowerCase()] ?? 9) - (rank[(b.scale || "").toLowerCase()] ?? 9))[0] || null;
-    }
-    function unitHtml(u, refs) {
-      const title = (u.name || u.strat_name || "Unnamed map unit").trim();
-      const rock = u.lith ? tidyLith(u.lith) : "";
-      const age = (u.t_int_name && u.b_int_name && u.t_int_name !== u.b_int_name)
-        ? (u.b_int_name + " – " + u.t_int_name)
-        : (u.t_int_name || u.b_int_name || "");
-      const expl = (u.descrip || u.comments || "").trim()
-        || (rock ? ("Bedrock mapped as " + rock + (age ? " (" + age + ")" : "") + ".") : "Bedrock unit from the Macrostrat / USGS geologic map compilation.");
-      const swatch = u.color ? '<span class="lf-geo-swatch" style="background:' + esc(u.color) + '"></span>' : "";
+    function geoUnitHtml(props, d) {
+      const mu = String(props.MapUnit || "");
+      const title = d.Name || d.FullName || props.Label || mu || "Geologic unit";
+      const swatch = geoColors[mu] ? '<span class="lf-geo-swatch" style="background:' + esc(geoColors[mu]) + '"></span>' : "";
       let rows = "";
-      if (rock) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Rock type</span><span class="lf-geo-v">' + esc(rock) + "</span></div>";
-      if (age) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Age</span><span class="lf-geo-v">' + esc(age) + "</span></div>";
-      if (u.strat_name && u.strat_name.trim() && u.strat_name.trim() !== title) {
-        rows += '<div class="lf-geo-row"><span class="lf-geo-k">Unit</span><span class="lf-geo-v">' + esc(u.strat_name.trim()) + "</span></div>";
-      }
-      const srcRaw = (u.source_id != null && refs && refs[String(u.source_id)]) ? String(refs[String(u.source_id)]).trim() : "";
-      const src = srcRaw ? '<p class="lf-geo-src">' + esc(srcRaw.slice(0, 280)) + (srcRaw.length > 280 ? "…" : "") + "</p>" : "";
+      if (d.GeoMaterial) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Material</span><span class="lf-geo-v">' + esc(d.GeoMaterial) + "</span></div>";
+      if (d.Age) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Age</span><span class="lf-geo-v">' + esc(d.Age) + "</span></div>";
+      if (mu) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Unit</span><span class="lf-geo-v">' + esc(mu) + "</span></div>";
+      const expl = d.Description ? '<p class="lf-geo-expl">' + esc(d.Description) + "</p>" : "";
       return '<div class="lf-geo-popup"><div class="lf-geo-title">' + swatch + "<strong>" + esc(title) + "</strong></div>"
-        + rows + '<p class="lf-geo-expl">' + esc(expl) + "</p>" + src
-        + '<p class="lf-geo-credit">Macrostrat / USGS · tap elsewhere to identify another area</p></div>';
+        + rows + expl
+        + '<p class="lf-geo-credit">USGS Cooperative National Geologic Map · tap elsewhere to identify another area</p></div>';
     }
+    let identifyTok = 0;
     async function identifyAt(latlng) {
-      if (identifyAbort) identifyAbort.abort();
-      identifyAbort = new AbortController();
-      // Bottom card — not a Leaflet popup — so STACK / hint never cover the result.
+      const tok = ++identifyTok;
       closeDetail();
-      geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up bedrock…</p></div>';
+      geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up geology…</p></div>';
       geoCard.classList.add("show");
       syncOverlayChrome();
       try {
-        const url = "https://macrostrat.org/api/v2/geologic_units/map?lat=" + encodeURIComponent(latlng.lat) + "&lng=" + encodeURIComponent(latlng.lng);
-        const res = await fetch(url, { signal: identifyAbort.signal, headers: { Accept: "application/json" } });
-        if (!res.ok) throw new Error("Macrostrat identify failed (" + res.status + ")");
-        const body = await res.json();
-        const unit = pickUnit((body.success && body.success.data) || []);
-        if (!unit) {
-          geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">No geologic unit found here.</p></div>';
-          return;
-        }
-        geoCardBody.innerHTML = unitHtml(unit, (body.success && body.success.refs) || {});
+        const url = GEO_UNITS + "/query?geometry=" + encodeURIComponent(latlng.lng + "," + latlng.lat)
+          + "&where=1%3D1&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=MapUnit,Label&returnGeometry=false&f=json";
+        const [res] = await Promise.all([fetch(url).then((r) => { if (!r.ok) throw new Error("Geology lookup failed (" + r.status + ")"); return r.json(); }), geoDict().catch(() => {})]);
+        if (tok !== identifyTok) return;
+        const f = res.features && res.features[0];
+        if (!f) { geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">No geologic unit found here.</p></div>'; return; }
+        const p = f.attributes || {};
+        geoCardBody.innerHTML = geoUnitHtml(p, geoDmu[String(p.MapUnit || "")] || {});
       } catch (err) {
-        if (err && err.name === "AbortError") return;
-        geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">' + esc((err && err.message) || "Identify failed") + "</p></div>";
+        if (tok !== identifyTok) return;
+        geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">' + esc((err && err.message) || "Lookup failed") + "</p></div>";
       }
     }
 
@@ -1042,7 +1166,7 @@
         return;
       }
       // ignore map clicks that hit markers (they open detail themselves)
-      if (geoOn) {
+      if (geoOn && !(parOn && map.getZoom() >= 15)) {
         void identifyAt(ev.latlng);
       }
     });
