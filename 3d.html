@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Greers Ferry Lake – 3D</title>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+html,body,#map{margin:0;height:100%;background:#072a36}
+.bar{position:fixed;top:calc(10px + env(safe-area-inset-top));left:10px;right:10px;z-index:5;display:flex;gap:6px;align-items:center;font:600 14px system-ui,sans-serif;pointer-events:none}
+.bar>*{pointer-events:auto}
+.btn{background:#0b3d4d;color:#f4f7f8;border:1px solid #1f6276;border-radius:10px;padding:8px 12px;text-decoration:none;font:inherit;cursor:pointer}
+.btn.on{background:#e8c56b;color:#072a36;border-color:#e8c56b}
+.sp{flex:1}
+.note{position:fixed;left:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:5;background:#0e2a3aee;color:#fff;border-radius:8px;padding:5px 9px;font:12px system-ui,sans-serif}
+</style></head><body>
+<div id="map"></div>
+<div class="bar">
+  <a class="btn" id="back" href="./">← Back to map</a>
+  <span class="sp"></span>
+  <button class="btn on" id="bSat">Satellite</button>
+  <button class="btn" id="bTopo">Topo</button>
+</div>
+<div class="note">Two-finger drag to tilt · twist to rotate · terrain exaggerated 1.5×</div>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+(function(){
+  var z=12, lat=35.53, lng=-92.17;
+  var m=location.hash.replace("#","").split("/").map(Number);
+  if(m.length>=3 && m.every(isFinite)){ z=m[0]; lat=m[1]; lng=m[2]; }
+  z=Math.max(8,Math.min(15,z));
+  var map=new maplibregl.Map({
+    container:"map", center:[lng,lat], zoom:z, pitch:60, bearing:0, maxPitch:80, maxZoom:16,
+    style:{version:8,
+      sources:{
+        sat:{type:"raster",tileSize:256,maxzoom:19,attribution:"Imagery © Esri",tiles:["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"]},
+        topo:{type:"raster",tileSize:256,maxzoom:15,attribution:"USGS historic topo via Esri",tiles:["https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}"]},
+        dem:{type:"raster-dem",encoding:"terrarium",tileSize:256,maxzoom:15,attribution:"Terrain: Mapzen/AWS Terrain Tiles",tiles:["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"]}
+      },
+      layers:[
+        {id:"sat",type:"raster",source:"sat"},
+        {id:"topo",type:"raster",source:"topo",layout:{visibility:"none"}}
+      ],
+      terrain:{source:"dem",exaggeration:1.5}
+    }
+  });
+  window.__map3d=map;
+  map.addControl(new maplibregl.NavigationControl({visualizePitch:true}),"top-right");
+  function sw(w){
+    map.setLayoutProperty("sat","visibility",w==="sat"?"visible":"none");
+    map.setLayoutProperty("topo","visibility",w==="topo"?"visible":"none");
+    document.getElementById("bSat").classList.toggle("on",w==="sat");
+    document.getElementById("bTopo").classList.toggle("on",w==="topo");
+  }
+  document.getElementById("bSat").onclick=function(){sw("sat")};
+  document.getElementById("bTopo").onclick=function(){sw("topo")};
+})();
+</script></body></html>

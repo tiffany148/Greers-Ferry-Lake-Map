@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b3d4d" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GFL Map" />
+  <title>Greers Ferry Lake Map</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-180.png" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    :root {
+      --bg: #072a36; --panel: #0b3d4d; --card: #11485a; --text: #f4f7f8;
+      --muted: #b7c9cf; --accent: #7ed0c8;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+    #map { position: absolute; inset: 0; }
+    header {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
+      padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
+      background: linear-gradient(180deg, rgba(7,42,54,.94), rgba(7,42,54,.4) 80%, transparent);
+    }
+    .row { display: flex; align-items: center; gap: 8px; }
+    header h1 { font-size: 15px; margin: 0; }
+    header p { margin: 1px 0 0; font-size: 11px; color: var(--muted); }
+    .brand { flex: 1; }
+    button.tool {
+      background: var(--panel); color: var(--text); border: 1px solid #1f6276;
+      border-radius: 10px; padding: 7px 9px; font-size: 12px;
+    }
+    button.tool.on { background: var(--accent); color: #08323c; font-weight: 700; }
+    .layers { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; }
+    .overlays { display: flex; gap: 6px; margin-top: 6px; overflow-x: auto; align-items: center; }
+    .overlays .label {
+      flex: 0 0 auto; align-self: center; font-size: 11px; color: var(--muted);
+      text-transform: uppercase; letter-spacing: 0.04em; margin-right: 2px;
+    }
+    .fade-wrap {
+      display: none; flex: 0 0 auto; align-items: center; gap: 6px;
+      background: var(--panel); border: 1px solid #1f6276; border-radius: 10px;
+      padding: 4px 8px; font-size: 11px; color: var(--muted);
+    }
+    .fade-wrap.show { display: flex; }
+    .fade-wrap input[type="range"] { width: 72px; accent-color: var(--accent); }
+    .fade-wrap .pct { min-width: 2.2em; text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    .geo-loading { position:fixed; left:50%; bottom:calc(86px + env(safe-area-inset-bottom)); transform:translateX(-50%); z-index:1200; display:flex; align-items:center; gap:8px; background:#0e2a3aee; color:#fff; border:1px solid #1e4a5f; border-radius:999px; padding:6px 12px; font-size:12px; box-shadow:0 4px 14px #0007; pointer-events:none; opacity:0; visibility:hidden; transition:opacity .3s, visibility 0s linear .3s; white-space:nowrap; }
+    .geo-loading.on { opacity:1; visibility:visible; transition:opacity .3s, visibility 0s; }
+    .geo-loading .spin { width:12px; height:12px; border-radius:50%; border:2px solid #7bdff2; border-right-color:transparent; animation:gflspin .8s linear infinite; }
+    @keyframes gflspin { to { transform:rotate(360deg); } }
+    .geo-card .lf-geo-badge{display:inline-block;margin-left:6px;font-size:11px;color:var(--muted)}
+    .geo-hint {
+      display: none; position: absolute; left: 10px; right: 10px; z-index: 1050;
+      /* Sit above the pin sheet — never under the STACK header (that clipped identify UI). */
+      top: auto; bottom: calc(118px + env(safe-area-inset-bottom));
+      background: rgba(11,61,77,.94); color: var(--text); border: 1px solid #1f6276;
+      border-radius: 10px; padding: 8px 10px; font-size: 12px; text-align: center;
+      pointer-events: none;
+    }
+    .geo-hint.show { display: block; }
+    .geo-card {
+      display: none; position: absolute; left: 10px; right: 10px; z-index: 1260;
+      bottom: calc(128px + env(safe-area-inset-bottom));
+      background: rgba(11,61,77,.98); border: 1px solid #1f6276; border-radius: 14px;
+      padding: 12px; max-height: min(38vh, 280px); overflow: auto;
+      box-shadow: 0 12px 40px rgba(0,0,0,.45);
+    }
+    .geo-card.show { display: block; }
+    .geo-card .geo-card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+    .geo-card .geo-card-close {
+      flex: 0 0 auto; background: var(--card); color: var(--text); border: 1px solid #1f6276;
+      border-radius: 8px; width: 32px; height: 32px; font-size: 18px; line-height: 1;
+    }
+    /* Identify used to be a Leaflet popup under the STACK bar — keep map popups below chrome. */
+    .leaflet-popup-pane { z-index: 650; }
+    .add-menu {
+      display: none; position: absolute; top: 108px; right: 10px; z-index: 1200;
+      width: min(240px, calc(100vw - 20px)); background: rgba(11,61,77,.98);
+      border: 1px solid #1f6276; border-radius: 12px; padding: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .add-menu.show { display: block; }
+    .add-menu button {
+      display: block; width: 100%; text-align: left; background: var(--card); color: var(--text);
+      border: 1px solid #1f6276; border-radius: 8px; padding: 8px 10px; margin: 4px 0; font-size: 13px;
+    }
+    .add-menu button small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+    .detail {
+      display: none; position: absolute; left: 10px; right: 10px; bottom: calc(120px + env(safe-area-inset-bottom));
+      z-index: 1200; background: rgba(11,61,77,.98); border: 1px solid #1f6276; border-radius: 14px;
+      padding: 12px; max-height: 42vh; overflow: auto; box-shadow: 0 12px 40px rgba(0,0,0,.4);
+    }
+    .detail.show { display: block; }
+    .detail h3 { margin: 0 0 4px; font-size: 16px; }
+    .detail .meta { font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
+    .detail p { margin: 6px 0 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
+    .detail .row { margin-top: 6px; font-size: 12px; color: var(--text); }
+    .detail .row span { color: var(--muted); }
+    .detail .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .detail .btns button { background: var(--card); color: var(--accent); border: 1px solid #2a6b7c; border-radius: 8px; padding: 7px 10px; font-size: 12px; }
+    .detail .btns button.danger { color: #ffb4a8; }
+    .detail input, .detail select {
+      width: 100%; margin-top: 6px; background: var(--card); color: var(--text);
+      border: 1px solid #1f6276; border-radius: 8px; padding: 8px; font-size: 13px;
+    }
+    .lf-geo-popup { min-width: 12rem; max-width: 18rem; font-size: 13px; line-height: 1.4; }
+    .lf-geo-title { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 6px; font-size: 15px; }
+    .lf-geo-swatch { width: 12px; height: 12px; margin-top: 3px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3); flex: 0 0 auto; }
+    .lf-geo-row { display: grid; grid-template-columns: 5.2rem 1fr; gap: 4px; margin: 3px 0; }
+    .lf-geo-k { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .lf-geo-expl { margin: 8px 0 0; }
+    .lf-geo-src, .lf-geo-credit { margin: 6px 0 0; font-size: 11px; color: var(--muted); line-height: 1.35; }
+    .sheet {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 1000;
+      height: 42vh; display: flex; flex-direction: column;
+      background: rgba(11,61,77,.96); border-radius: 18px 18px 0 0;
+      padding: 6px 12px calc(12px + env(safe-area-inset-bottom));
+      box-shadow: 0 -8px 30px rgba(0,0,0,.35); transition: height .22s ease;
+    }
+    .sheet.mid { height: 42vh; } .sheet.full { height: 78vh; } .sheet.min { height: 108px; }
+    .handle-wrap { padding: 8px 0 6px; }
+    .handle { width: 42px; height: 5px; background: #7ed0c8; border-radius: 99px; margin: 0 auto; }
+    .sheet-body { overflow: auto; -webkit-overflow-scrolling: touch; flex: 1; }
+    .filters { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+    .chip {
+      flex: 0 0 auto; border: 1px solid #1f6276; background: var(--card);
+      color: var(--text); border-radius: 999px; padding: 6px 10px; font-size: 12px;
+    }
+    .chip.on { background: var(--accent); color: #08323c; font-weight: 700; }
+    .list { display: grid; gap: 8px; }
+    .item { background: var(--card); border-radius: 12px; padding: 10px 12px; display: flex; gap: 10px; align-items: flex-start; }
+    .dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex: 0 0 auto; }
+    .item h3 { margin: 0; font-size: 14px; }
+    .item p { margin: 3px 0 0; font-size: 12px; color: var(--muted); }
+    .item a { color: var(--accent); font-size: 12px; text-decoration: none; }
+    .actions { margin-left: auto; display: flex; flex-direction: column; gap: 6px; }
+    .actions button { background: #0b3d4d; color: var(--accent); border: 1px solid #2a6b7c; border-radius: 8px; padding: 6px 8px; font-size: 11px; }
+    .note { font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+    .banner {
+      display: none; position: absolute; top: 108px; left: 10px; right: 10px; z-index: 1100;
+      background: #e8c56b; color: #08323c; border-radius: 10px; padding: 8px 10px; font-size: 13px; font-weight: 600; text-align: center;
+    }
+    .banner.show { display: block; }
+    .leaflet-popup-content-wrapper { background: #0b3d4d; color: #f4f7f8; border-radius: 12px; }
+    .leaflet-popup-tip { background: #0b3d4d; }
+    .leaflet-popup-content a { color: #7ed0c8; }
+    .gfl-north{display:flex;align-items:center;justify-content:center;width:30px;height:30px;background:#fff}
+  .gfl-north-wrap{position:fixed!important;right:12px;top:118px;z-index:1200;margin:0!important}
+  .gfl-3d{position:fixed;right:12px;top:158px;z-index:1200;width:30px;height:30px;border-radius:4px;background:#fff;color:#0b3d4d;font:700 12px/30px system-ui,sans-serif;text-align:center;text-decoration:none;box-shadow:0 1px 5px rgba(0,0,0,.65)}
+  .par-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));z-index:1200;background:#0e2a3aee;color:#fff;border:1px solid #1e4a5f;border-radius:999px;padding:6px 12px;font-size:12px;display:none;pointer-events:none;white-space:nowrap}
+  .par-note.show{display:block}
+  .gfl-north svg{transition:transform .15s}
+</style>
+</head>
+<body>
+  <div id="map"></div>
+  <div class="banner" id="banner">Tap the map to drop your pin</div>
+  <div class="add-menu" id="addMenu" role="menu">
+    <button type="button" data-add="cove">Cove name<small>Local pocket name</small></button>
+    <button type="button" data-add="depth">Water depth<small>Sounding in feet</small></button>
+    <button type="button" data-add="temperature">Temperature<small>Surface °F</small></button>
+    <button type="button" data-add="hazard">Hazard<small>Stump, rock, shoal…</small></button>
+    <button type="button" data-add="pin">Custom pin<small>Any mark on this phone</small></button>
+  </div>
+  <div class="detail" id="detail"></div>
+  <header>
+    <div class="row">
+      <div class="brand">
+        <h1>Greers Ferry Lake</h1>
+        <p>Find Your Escape · pins, layers & coves</p>
+      </div>
+      <button class="tool" id="locate">My location</button>
+      <button class="tool" id="addPin">Add pin</button>
+      <button class="tool" id="toggleSheet">Hide list</button>
+    </div>
+    <div class="layers" id="basemap">
+      <button class="tool on" data-base="streets">Streets</button>
+      <button class="tool" data-base="sat">Satellite</button>
+      <button class="tool" data-base="topo">Topo</button>
+    </div>
+    <div class="overlays" id="overlays">
+      <span class="label">Stack</span>
+      <button class="tool" data-overlay="hist" aria-pressed="false">Before the dam</button>
+      <label class="fade-wrap" id="histFade">
+        Opacity
+        <input type="range" id="histOpacity" min="0.15" max="1" step="0.02" value="0.78" aria-label="Before the dam opacity" />
+        <span class="pct" id="histPct">78</span>
+      </label>
+      <button class="tool" data-overlay="geo" aria-pressed="false">Geology</button>
+      <label class="fade-wrap" id="geoFade">
+        Opacity
+        <input type="range" id="geoOpacity" min="0.1" max="0.9" step="0.02" value="0.55" aria-label="Geology opacity" />
+        <span class="pct" id="geoPct">55</span>
+      </label>
+      <button class="tool" data-overlay="parcels" aria-pressed="false">Parcels &amp; owners</button>
+      <label class="fade-wrap" id="parFade">
+        Opacity
+        <input type="range" id="parOpacity" min="0.2" max="1" step="0.02" value="0.9" aria-label="Parcels opacity" />
+        <span class="pct" id="parPct">90</span>
+      </label>
+    </div>
+  </header>
+  <a class="gfl-3d" id="btn3d" href="3d.html" title="View in 3D" aria-label="View in 3D">3D</a>
+  <div class="par-note" id="parNote">Zoom in closer to see parcels · Not a legal boundary</div>
+  <div class="geo-loading" id="geoLoading" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span><span>Loading geology…</span></div>
+  <div class="geo-hint" id="geoHint">Geology on — tap the map for rock type &amp; age</div>
+  <div class="geo-card" id="geoCard" role="dialog" aria-label="Geology identify">
+    <div class="geo-card-top">
+      <div id="geoCardBody"></div>
+      <button type="button" class="geo-card-close" id="geoCardClose" aria-label="Close geology info">×</button>
+    </div>
+  </div>
+  <section class="sheet mid" id="sheet">
+    <div class="handle-wrap" id="handle"><div class="handle"></div></div>
+    <div class="filters">
+      <button class="chip" id="myMapOnly" type="button" aria-pressed="true" title="Official catalog + your pins on this phone">My map only</button>
+      <button class="chip on" data-type="all">All</button>
+      <button class="chip" data-type="mine">My pins</button>
+      <button class="chip" data-type="cove">Coves</button>
+      <button class="chip" data-type="marina">Marinas</button>
+      <button class="chip" data-type="ramp">Ramps</button>
+      <button class="chip" data-type="park">Parks</button>
+      <button class="chip" data-type="swim">Swim</button>
+    </div>
+    <div class="pin-io" style="display:flex;gap:8px;flex-wrap:wrap;padding:0 0 8px">
+      <button type="button" class="tool" id="exportPins">Export my pins</button>
+      <button type="button" class="tool" id="importPins">Import my pins</button>
+      <button type="button" class="tool" id="restoreHidden" style="display:none;padding:4px 10px">Restore hidden</button>
+      <input type="file" id="importPinsFile" accept="application/json,.json" hidden />
+    </div>
+    <div class="sheet-body">
+      <div class="list" id="list"></div>
+      <p class="note">
+        Tap <b>Add pin</b> and choose a type (cove, depth, temperature, hazard, or custom). Tap a pin for info.
+        <b>My pins</b> are stored on this phone (localStorage) and stay until you delete them — reload and browser restart keep them.
+        <b>My map only</b> keeps the official catalog plus your pins (this site has no live community feed; the React app can hide shared pins the same way).
+        Use <b>Export / Import my pins</b> to move pins to another phone. Cross-device sign-in sync is not on this Pages build.
+        Official map pins can be <b>removed from your map</b> (hidden on this phone only — restore via the quiet Restore hidden control above when needed).
+        <b>Streets</b> is the default lake map (green land / blue water). Satellite and Topo are alternatives. <b>Before the dam</b> and <b>Geology</b> are optional stack overlays — each has its own opacity slider.
+        With Geology on, tap the map for unit name, age, and material (USGS National Geologic Map).
+        Before the dam uses the USGS historic topographic maps (via Esri) — Stark prints in red on the map itself. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
+      </p>
+    </div>
+  </section>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate.js"></script>
+  <script src="https://unpkg.com/esri-leaflet@3.0.12/dist/esri-leaflet.js"></script>
+  <script>
+    const builtIn = [
+      { name: "Unnamed spot (35.5719, -92.2170)", type: "cove", lat: 35.571854, lng: -92.216952, note: "From Greers Ferry Lake cove names map." },
+      { name: "Drip Creek", type: "cove", lat: 35.572575, lng: -92.063734, note: "From lake map data (KML)." },
+      { name: "Brittany Cove", type: "cove", lat: 35.558451, lng: -92.081319, note: "From lake map data (KML)." },
+      { name: "Twin Coves", type: "cove", lat: 35.55878, lng: -92.076148, note: "From lake map data (KML)." },
+      { name: "Kidney Cove", type: "cove", lat: 35.529065, lng: -92.054001, note: "From lake map data (KML)." },
+      { name: "Silver Ridge Peninsula", type: "cove", lat: 35.516682, lng: -92.052897, note: "From lake map data (KML)." },
+      { name: "Tannenbaum", type: "cove", lat: 35.524065, lng: -92.061556, note: "From lake map data (KML)." },
+      { name: "Heber Springs Marina/Heber Rec.", type: "marina", lat: 35.501211, lng: -92.058959, note: "In-town marina at Heber Springs Recreation Area \u2014 south-shore hub since the reservoir opened.", address: "99 Park Rd, Heber Springs, AR 72543", phone: "501-362-8838" },
+      { name: "Scout Island", type: "cove", lat: 35.535427, lng: -92.076655, note: "Near Goat Island, north of Eden Isle." },
+      { name: "Goat Island", type: "cove", lat: 35.519176, lng: -92.086056, note: "Island north of Eden Isle Marina." },
+      { name: "Bird Island", type: "cove", lat: 35.528582, lng: -92.024903, note: "Long narrow island, Big Water. Purple martins roost here." },
+      { name: "Eden Isle Marina", type: "marina", lat: 35.501338, lng: -92.095372, note: "Full-service marina on the Eden Isle peninsula (1960s resort era). Fuel, slips, boat services. Goat & Scout Islands to the north.", address: "10 Yacht Harbor Rd, Heber Springs, AR 72543", phone: "501-362-2232" },
+      { name: "Eden Isle", type: "cove", lat: 35.505689, lng: -92.102956, note: "From lake map data (KML)." },
+      { name: "Lake Eden", type: "cove", lat: 35.499082, lng: -92.10374, note: "From lake map data (KML)." },
+      { name: "Big Dike", type: "cove", lat: 35.476262, lng: -92.08944, note: "From lake map data (KML)." },
+      { name: "Little Dike", type: "cove", lat: 35.491561, lng: -92.062678, note: "From lake map data (KML)." },
+      { name: "Old Road", type: "cove", lat: 35.498946, lng: -92.102843, note: "From lake map data (KML)." },
+      { name: "Miller's Point", type: "cove", lat: 35.510669, lng: -92.134681, note: "From lake map data (KML)." },
+      { name: "Diamond Bluff", type: "cove", lat: 35.516069, lng: -92.190839, note: "From lake map data (KML)." },
+      { name: "Salt Creek", type: "cove", lat: 35.523876, lng: -92.209812, note: "From lake map data (KML)." },
+      { name: "Tortoise Bay", type: "cove", lat: 35.538393, lng: -92.213294, note: "From lake map data (KML)." },
+      { name: "Parker Island", type: "park", lat: 35.537814, lng: -92.205221, note: "From lake map data (KML)." },
+      { name: "Bondair", type: "cove", lat: 35.538902, lng: -92.182669, note: "From lake map data (KML)." },
+      { name: "Shiloh Marina", type: "marina", lat: 35.539241, lng: -92.146164, note: "Marina at Shiloh Rec \u2014 first slips after the Narrows. Historic Shiloh community sat nearby before the lake filled.", address: "Shiloh Recreation Area, Greers Ferry / Heber Springs, AR" },
+      { name: "Puddin' Ridge", type: "cove", lat: 35.543227, lng: -92.114992, note: "From lake map data (KML)." },
+      { name: "Hurricane Bay", type: "cove", lat: 35.549944, lng: -92.177319, note: "From lake map data (KML)." },
+      { name: "Lacey's Narrows Marina", type: "marina", lat: 35.559644, lng: -92.19424, note: "Marina in the gorge between the two lakes at Narrows Park. Staging point for running the Narrows.", address: "7674 Edgemont Rd, Higden, AR 72067", phone: "501-825-6214" },
+      { name: "The Narrows/Main Channel", type: "cove", lat: 35.551077, lng: -92.186995, note: "From lake map data (KML)." },
+      { name: "Lake Ice Rd.", type: "cove", lat: 35.539431, lng: -92.207449, note: "From lake map data (KML)." },
+      { name: "Poker Hill", type: "cove", lat: 35.578382, lng: -92.202442, note: "From lake map data (KML)." },
+      { name: "Higden Bay", type: "cove", lat: 35.571769, lng: -92.213835, note: "From lake map data (KML)." },
+      { name: "Mill Creek", type: "cove", lat: 35.582677, lng: -92.219186, note: "From lake map data (KML)." },
+      { name: "Five Fingers", type: "cove", lat: 35.588646, lng: -92.228181, note: "From lake map data (KML)." },
+      { name: "Mystic Isle", type: "cove", lat: 35.606547, lng: -92.173129, note: "From lake map data (KML)." },
+      { name: "Jansen's Lakefront Restaurant", type: "cove", lat: 35.602316, lng: -92.187217, note: "From lake map data (KML)." },
+      { name: "Middle Fork", type: "cove", lat: 35.614166, lng: -92.194603, note: "From lake map data (KML)." },
+      { name: "Skypoint", type: "cove", lat: 35.604237, lng: -92.140621, note: "From lake map data (KML)." },
+      { name: "Midway Bluffs", type: "cove", lat: 35.607176, lng: -92.126071, note: "From lake map data (KML)." },
+      { name: "Hill Creek Marina", type: "marina", lat: 35.607768, lng: -92.149141, note: "Quiet north-shore marina at Hill Creek Cove near Edgemont, with Corps camping next door.", address: "Hill Creek Rd, Edgemont, AR 72044" },
+      { name: "Shirley", type: "cove", lat: 35.65542, lng: -92.32029, note: "From lake map data (KML)." },
+      { name: "Wild Goose Creek", type: "cove", lat: 35.656606, lng: -92.219716, note: "From lake map data (KML)." },
+      { name: "Birdie Hollow", type: "cove", lat: 35.643879, lng: -92.221298, note: "From lake map data (KML)." },
+      { name: "Brewer", type: "cove", lat: 35.622387, lng: -92.209168, note: "From lake map data (KML)." },
+      { name: "Shop Hollow", type: "cove", lat: 35.626688, lng: -92.19332, note: "From lake map data (KML)." },
+      { name: "Brush Creek", type: "cove", lat: 35.626015, lng: -92.187439, note: "From lake map data (KML)." },
+      { name: "Stewart Hollow", type: "cove", lat: 35.624008, lng: -92.212588, note: "From lake map data (KML)." },
+      { name: "Punchin Hollow", type: "cove", lat: 35.641238, lng: -92.215344, note: "From lake map data (KML)." },
+      { name: "Sandiff River", type: "cove", lat: 35.65044, lng: -92.225923, note: "From lake map data (KML)." },
+      { name: "Indian Creek", type: "cove", lat: 35.665245, lng: -92.254764, note: "From lake map data (KML)." },
+      { name: "Greenbrier Creek", type: "cove", lat: 35.666634, lng: -92.2615, note: "From lake map data (KML)." },
+      { name: "Ship Branch", type: "cove", lat: 35.665974, lng: -92.267352, note: "From lake map data (KML)." },
+      { name: "Weaver Creek", type: "cove", lat: 35.644808, lng: -92.301008, note: "From lake map data (KML)." },
+      { name: "Hump Hollow", type: "cove", lat: 35.644036, lng: -92.297064, note: "From lake map data (KML)." },
+      { name: "Big Branch", type: "cove", lat: 35.646104, lng: -92.334988, note: "From lake map data (KML)." },
+      { name: "Harper's Cove", type: "cove", lat: 35.552269, lng: -92.361566, note: "From lake map data (KML)." },
+      { name: "Dave Creek", type: "cove", lat: 35.586335, lng: -92.266565, note: "From lake map data (KML)." },
+      { name: "Hooten Hollow", type: "cove", lat: 35.576702, lng: -92.250954, note: "From lake map data (KML)." },
+      { name: "Grand Isle", type: "cove", lat: 35.578388, lng: -92.237088, note: "From lake map data (KML)." },
+      { name: "Lynn Creek", type: "cove", lat: 35.58301, lng: -92.289688, note: "From lake map data (KML)." },
+      { name: "Enchanted Peninsula", type: "cove", lat: 35.57754, lng: -92.247412, note: "From lake map data (KML)." },
+      { name: "Snakehead Cove", type: "cove", lat: 35.5749, lng: -92.283759, note: "From lake map data (KML)." },
+      { name: "Fairfield Bay Marina", type: "marina", lat: 35.566796, lng: -92.297438, note: "Full-service marina on Hwy 330. Fuel, rentals, slips, seasonal Sugar Loaf Island shuttle. Resort waterfront since the 1960s\u201370s.", address: "4350 AR-330 S, Fairfield Bay, AR 72088", phone: "501-884-6030" },
+      { name: "Boat Ridge Island", type: "cove", lat: 35.553687, lng: -92.315971, note: "From lake map data (KML)." },
+      { name: "Green Creek", type: "cove", lat: 35.556865, lng: -92.317727, note: "From lake map data (KML)." },
+      { name: "Party Cove", type: "cove", lat: 35.5605, lng: -92.332248, note: "From lake map data (KML)." },
+      { name: "Thompson Creek", type: "cove", lat: 35.562339, lng: -92.335217, note: "From lake map data (KML)." },
+      { name: "South Fork", type: "cove", lat: 35.554396, lng: -92.323664, note: "From lake map data (KML)." },
+      { name: "Peter Rock Point", type: "cove", lat: 35.545109, lng: -92.357545, note: "From lake map data (KML)." },
+      { name: "South Fork River", type: "cove", lat: 35.564818, lng: -92.37541, note: "From lake map data (KML)." },
+      { name: "Archey Creek", type: "cove", lat: 35.590336, lng: -92.446911, note: "From lake map data (KML)." },
+      { name: "Pee Dee Creek", type: "cove", lat: 35.591895, lng: -92.413845, note: "From lake map data (KML)." },
+      { name: "Choctaw Creek", type: "cove", lat: 35.531929, lng: -92.363545, note: "From lake map data (KML)." },
+      { name: "Choctaw Marina", type: "marina", lat: 35.531265, lng: -92.38321, note: "West-end marina by Choctaw Rec \u2014 long known as Furgerson's. Last/first fuel on the Choctaw Creek arm.", address: "3848\u20133850 Hwy 330 E, Clinton, AR 72031", phone: "501-745-2666" },
+      { name: "Emerald Isle", type: "cove", lat: 35.552498, lng: -92.335119, note: "From lake map data (KML)." },
+      { name: "Eglantine", type: "cove", lat: 35.562269, lng: -92.309703, note: "From lake map data (KML)." },
+      { name: "Quiet Cove", type: "cove", lat: 35.562445, lng: -92.318539, note: "From lake map data (KML)." },
+      { name: "Steven's Point", type: "cove", lat: 35.544029, lng: -92.312428, note: "From lake map data (KML)." },
+      { name: "Bailey Hollow", type: "cove", lat: 35.546969, lng: -92.307948, note: "From lake map data (KML)." },
+      { name: "Banker's Cove", type: "cove", lat: 35.543166, lng: -92.307636, note: "From lake map data (KML)." },
+      { name: "Tee Pee Cove", type: "cove", lat: 35.575136, lng: -92.27929, note: "From lake map data (KML)." },
+      { name: "Lakeshore Dr.", type: "cove", lat: 35.581062, lng: -92.260998, note: "From lake map data (KML)." },
+      { name: "Kinderhook", type: "cove", lat: 35.595971, lng: -92.206855, note: "From lake map data (KML)." },
+      { name: "Eva Turney Hollow", type: "cove", lat: 35.597265, lng: -92.210408, note: "From lake map data (KML)." },
+      { name: "Edgewater", type: "cove", lat: 35.59721, lng: -92.201389, note: "From lake map data (KML)." },
+      { name: "Old Train Bridge", type: "cove", lat: 35.602366, lng: -92.188046, note: "From lake map data (KML)." },
+      { name: "Salt Cave", type: "cove", lat: 35.593215, lng: -92.171948, note: "From lake map data (KML)." },
+      { name: "Davidson Circle", type: "cove", lat: 35.601395, lng: -92.148001, note: "From lake map data (KML)." },
+      { name: "Launch Ramp Rd.", type: "ramp", lat: 35.592518, lng: -92.163329, note: "From lake map data (KML)." },
+      { name: "Sylvan Shores", type: "cove", lat: 35.605128, lng: -92.13587, note: "From lake map data (KML)." },
+      { name: "OId Sunny Slope Rd.", type: "cove", lat: 35.607802, lng: -92.126389, note: "From lake map data (KML)." },
+      { name: "Midway Bridge", type: "cove", lat: 35.606765, lng: -92.12823, note: "From lake map data (KML)." },
+      { name: "Devil's Bluff", type: "cove", lat: 35.605605, lng: -92.12794, note: "From lake map data (KML)." },
+      { name: "Little Goat Island", type: "cove", lat: 35.614405, lng: -92.097768, note: "Smaller island west of Goat Island." },
+      { name: "Frontier Canyon", type: "cove", lat: 35.61872, lng: -92.085286, note: "From lake map data (KML)." },
+      { name: "Wildcat Hollow", type: "cove", lat: 35.621324, lng: -92.096293, note: "From lake map data (KML)." },
+      { name: "Prim Rd. Hwy. 263", type: "cove", lat: 35.633168, lng: -92.053026, note: "From lake map data (KML)." },
+      { name: "Beech Fork", type: "cove", lat: 35.658116, lng: -92.015646, note: "From lake map data (KML)." },
+      { name: "Cedar Creek", type: "cove", lat: 35.653289, lng: -91.998734, note: "From lake map data (KML)." },
+      { name: "Yellow Branch", type: "cove", lat: 35.640439, lng: -92.030276, note: "From lake map data (KML)." },
+      { name: "Everett Ridge", type: "cove", lat: 35.681346, lng: -92.055548, note: "From lake map data (KML)." },
+      { name: "Bear Hollow", type: "cove", lat: 35.685124, lng: -92.056908, note: "From lake map data (KML)." },
+      { name: "Turkey Creek", type: "cove", lat: 35.662339, lng: -92.031966, note: "From lake map data (KML)." },
+      { name: "Tick Creek", type: "cove", lat: 35.734632, lng: -92.295749, note: "From lake map data (KML)." },
+      { name: "Porter Hollow", type: "cove", lat: 35.73263, lng: -92.294619, note: "From lake map data (KML)." },
+      { name: "Little Wild Goose Creek", type: "cove", lat: 35.674789, lng: -92.234011, note: "From lake map data (KML)." },
+      { name: "Backbone Ridge", type: "cove", lat: 35.682405, lng: -92.229601, note: "From lake map data (KML)." },
+      { name: "Hill Creek", type: "cove", lat: 35.635613, lng: -92.155114, note: "From lake map data (KML)." },
+      { name: "Bird Hollow", type: "cove", lat: 35.615545, lng: -92.197936, note: "From lake map data (KML)." },
+      { name: "Tumbling Shoals", type: "cove", lat: 35.541467, lng: -91.967687, note: "From lake map data (KML)." },
+      { name: "John F. Kennedy Overlook", type: "park", lat: 35.520229, lng: -91.992256, note: "From lake map data (KML)." },
+      { name: "Dam", type: "cove", lat: 35.521293, lng: -91.994387, note: "From lake map data (KML)." },
+      { name: "Big Lake", type: "cove", lat: 35.525788, lng: -91.991204, note: "From lake map data (KML)." },
+      { name: "Wackley Hollow", type: "cove", lat: 35.529761, lng: -91.987937, note: "From lake map data (KML)." },
+      { name: "Robinson Hollow", type: "cove", lat: 35.533969, lng: -91.995795, note: "From lake map data (KML)." },
+      { name: "Asphalt Beach", type: "swim", lat: 35.527847, lng: -92.012608, note: "From lake map data (KML)." },
+      { name: "US Army Corps of Engineers", type: "cove", lat: 35.521815, lng: -91.999412, note: "From lake map data (KML)." },
+      { name: "Little Red River", type: "cove", lat: 35.51819, lng: -91.995799, note: "From lake map data (KML)." },
+      { name: "Old Hwy 25 Park Beach", type: "swim", lat: 35.5342, lng: -92.015465, note: "From lake map data (KML)." },
+      { name: "Damsite Marina", type: "marina", lat: 35.529991, lng: -92.009381, note: "Marina inside Dam Site Recreation Area near the dam and visitor center (Kennedy dedication, 1963).", address: "Dam Site Recreation Area, Heber Springs, AR", phone: "501-362-2333" },
+      { name: "Sugar Loaf Mountain", type: "cove", lat: 35.56403, lng: -92.265491, note: "Island mountain. Boat-access hiking trail." },
+      { name: "Sugar Loaf Marina", type: "marina", lat: 35.546783, lng: -92.27443, note: "South-shore marina at Sugar Loaf Park looking at Sugar Loaf Mountain Island trail.", address: "1389 Resort Rd / Sugar Loaf Rec Area, Higden, AR" },
+      { name: "Peter Creek", type: "cove", lat: 35.56285, lng: -91.977983, note: "From lake map data (KML)." },
+      { name: "Copperas Spring Hollow", type: "cove", lat: 35.549816, lng: -92.024945, note: "From lake map data (KML)." },
+      { name: "Little Peter Creek", type: "cove", lat: 35.56502, lng: -92.015573, note: "From lake map data (KML)." },
+      { name: "Cherokee Park", type: "park", lat: 35.552298, lng: -92.077528, note: "Seasonal NE-shore campground looking toward Scout Island.", address: "475 Cherokee Park Rd, Heber Springs, AR" },
+      { name: "Dug Hill Rd.", type: "cove", lat: 35.55346, lng: -92.017961, note: "From lake map data (KML)." },
+      { name: "Collinâs Creek", type: "cove", lat: 35.514068, lng: -91.991271, note: "From lake map data (KML)." },
+      { name: "Cow Shoals", type: "cove", lat: 35.513478, lng: -91.938331, note: "From lake map data (KML)." },
+      { name: "Taylor Island", type: "cove", lat: 35.535549, lng: -92.126674, note: "From lake map data (KML)." },
+      { name: "Prior Mountain", type: "cove", lat: 35.491686, lng: -92.231959, note: "From lake map data (KML)." },
+      { name: "North Fork Cadron Creek", type: "cove", lat: 35.489197, lng: -92.228545, note: "From lake map data (KML)." },
+      { name: "Sugarloaf Mountain/The Lookout", type: "cove", lat: 35.490733, lng: -91.985694, note: "From lake map data (KML)." },
+      { name: "Rocky Top Falls", type: "cove", lat: 35.581407, lng: -92.288113, note: "From lake map data (KML)." },
+      { name: "Bridal Veil Falls", type: "cove", lat: 35.469208, lng: -92.038497, note: "From lake map data (KML)." },
+      { name: "Sandy Beach", type: "swim", lat: 35.498913, lng: -92.056421, note: "From lake map data (KML)." },
+      { name: "Pebble Beach", type: "swim", lat: 35.492345, lng: -92.054395, note: "From lake map data (KML)." },
+      { name: "Cove Creek", type: "cove", lat: 35.471211, lng: -92.144418, note: "From lake map data (KML)." },
+      { name: "Devil's Fork", type: "cove", lat: 35.590761, lng: -92.17961, note: "From lake map data (KML)." },
+      { name: "Narrows Launch", type: "ramp", lat: 35.563314, lng: -92.196252, note: "From lake map data (KML)." },
+      { name: "Devil's Fork Launch", type: "ramp", lat: 35.591872, lng: -92.18013, note: "From lake map data (KML)." },
+      { name: "Hill Creek Boat Ramp", type: "ramp", lat: 35.608461, lng: -92.146541, note: "From lake map data (KML)." },
+      { name: "Cove Creek Boat Launch", type: "ramp", lat: 35.464858, lng: -92.153024, note: "From lake map data (KML)." },
+      { name: "Mastercraft Alley", type: "cove", lat: 35.620144, lng: -92.190136, note: "From lake map data (KML)." },
+      { name: "Fairfield Bay Bluffs/Cliffs", type: "cove", lat: 35.573353, lng: -92.280515, note: "From lake map data (KML)." },
+      { name: "Budd Creek", type: "cove", lat: 35.55657, lng: -92.121844, note: "From lake map data (KML)." },
+      { name: "Narrows Park", type: "park", lat: 35.56397, lng: -92.19821, note: "Corps park on the gorge joining the two lakes. Camp + ramp + marina.", address: "7699 Edgemont Rd, Higden, AR 72067" },
+      { name: "Narrows Park Ramp", type: "ramp", lat: 35.5618, lng: -92.1969, note: "Corps launch at the Narrows bridge." },
+      { name: "The Narrows", type: "cove", lat: 35.5582, lng: -92.1935, note: "Gorge connecting upper and lower lake." },
+      { name: "Shiloh Park", type: "park", lat: 35.53758, lng: -92.14599, note: "Campground, marina, swim beach." },
+      { name: "Heber Springs Marina", type: "marina", lat: 35.50202, lng: -92.05932, note: "In-town marina at Heber Springs Recreation Area \u2014 south-shore hub since the reservoir opened.", address: "99 Park Rd, Heber Springs, AR 72543", phone: "501-362-8838" },
+      { name: "Heber Springs Park", type: "park", lat: 35.504, lng: -92.0665, note: "Seasonal Corps park with ramp + swim beach on the south shore.", address: "89 Park Rd, Heber Springs, AR 72543" },
+      { name: "Heber Springs Park Ramp", type: "ramp", lat: 35.5032, lng: -92.0638, note: "Public launch." },
+      { name: "Heber Springs Swim Beach", type: "swim", lat: 35.5024, lng: -92.0682, note: "No pets in day-use swim beaches." },
+      { name: "Goff Point", type: "cove", lat: 35.47647, lng: -92.16071, note: "South-shore point." },
+      { name: "Dam Site Park", type: "park", lat: 35.522, lng: -91.9976, note: "Largest Corps park at the dam \u2014 camping, marina, swim beach; dedicated with the dam in 1963.", address: "315 Heber Springs Rd N, Heber Springs, AR 72543" },
+      { name: "Dam Site Ramp", type: "ramp", lat: 35.5242, lng: -92.0048, note: "Launch near the dam." },
+      { name: "Greers Ferry Dam", type: "park", lat: 35.52091, lng: -91.9932, note: "Dam and Little Red tailwater." },
+      { name: "William Carl Garner Visitor Center", type: "park", lat: 35.5215, lng: -91.9994, note: "700 Heber Springs Rd N." },
+      { name: "John F. Kennedy Park", type: "park", lat: 35.51321, lng: -91.99684, note: "Year-round Corps park below the dam; named for the president who dedicated the project.", address: "375 Hatchery Rd, Heber Springs, AR 72543" },
+      { name: "John F. Kennedy Ramp", type: "ramp", lat: 35.5148, lng: -91.9952, note: "Near hatchery / tailwater." },
+      { name: "Old Highway 25 Park", type: "park", lat: 35.53946, lng: -92.01313, note: "Tumbling Shoals. Camp + swim + ramp." },
+      { name: "Cherokee Park Ramp", type: "ramp", lat: 35.5562, lng: -92.0789, note: "NE lower lake launch." },
+      { name: "Devils Fork Park", type: "park", lat: 35.58463, lng: -92.17853, note: "Year-round park on the Devil's Fork arm with ramps and swim areas.", address: "73 Devils Fork Rd, Greers Ferry, AR 72067" },
+      { name: "Devils Fork Ramp", type: "ramp", lat: 35.5832, lng: -92.1808, note: "Multi-lane ramp." },
+      { name: "Mill Creek Park", type: "park", lat: 35.58286, lng: -92.21821, note: "West of Greers Ferry." },
+      { name: "Hill Creek Park", type: "park", lat: 35.61091, lng: -92.14932, note: "Seasonal park and marina on the Hill Creek arm near Edgemont.", address: "474 Hill Creek Rd, Edgemont, AR 72044" },
+      { name: "Poker Hill Island", type: "cove", lat: 35.57841, lng: -92.2021, note: "Island near the Narrows / Higden." },
+      { name: "Higden (old town area)", type: "cove", lat: 35.57341, lng: -92.20321, note: "Town at the Narrows; parts of old Higden were flooded in 1962." },
+      { name: "Sugar Loaf Park", type: "park", lat: 35.54261, lng: -92.27057, note: "South-shore park facing Sugar Loaf Mountain Island.", address: "1389 Resort Rd, Higden, AR 72067" },
+      { name: "Five Fingers / Fairfield Bay", type: "cove", lat: 35.605, lng: -92.27, note: "North / Five Fingers arms of the upper lake." },
+      { name: "Choctaw Park", type: "park", lat: 35.53286, lng: -92.38043, note: "West-end full-service Corps park near Clinton.", address: "3848 Hwy 330 E, Clinton, AR 72031" },
+      { name: "Choctaw / Furgerson's Marina", type: "marina", lat: 35.5338, lng: -92.3782, note: "West-end marina by Choctaw Rec \u2014 long known as Furgerson's. Last/first fuel on the Choctaw Creek arm.", address: "3848\u20133850 Hwy 330 E, Clinton, AR 72031", phone: "501-745-2666" },
+      { name: "Cove Creek Park", type: "park", lat: 35.46177, lng: -92.15386, note: "South end of the lower lake." },
+
+    ];
+
+    const colors = {
+      marina: "#3db8ff", ramp: "#7ed07a", park: "#e8c56b", swim: "#79b8ff", cove: "#d4a0ff",
+      mine: "#ff8bd2", depth: "#5ec8ff", temperature: "#ff9f6b", hazard: "#ff6b6b", pin: "#c9a0ff"
+    };
+    const TYPE_LABEL = {
+      marina: "Marina", ramp: "Ramp", park: "Park", swim: "Swim", cove: "Cove",
+      mine: "My pin", depth: "Depth", temperature: "Temperature", hazard: "Hazard", pin: "Pin"
+    };
+    const STORE = "gfl-my-pins-v2";
+    const STORE_BAK = "gfl-my-pins-v2-bak";
+    const HIDDEN_STORE = "gfl-hidden-pins-v1";
+    const MY_MAP_ONLY_KEY = "gfl-my-map-only-v1";
+    function sanitizeMinePin(p) {
+      if (!p || typeof p !== "object") return null;
+      if (typeof p.name !== "string" || !p.name.trim()) return null;
+      if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) return null;
+      const type = typeof p.type === "string" && p.type ? p.type : "cove";
+      return {
+        id: p.id != null ? String(p.id) : String(Date.now()) + "-" + Math.random().toString(36).slice(2, 8),
+        name: String(p.name).trim().slice(0, 80),
+        type,
+        lat: Number(p.lat),
+        lng: Number(p.lng),
+        note: p.note ? String(p.note).slice(0, 280) : "",
+        value: p.value ? String(p.value).slice(0, 40) : ""
+      };
+    }
+    const loadMine = () => {
+      const tryKey = (key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return null;
+          const parsed = JSON.parse(raw);
+          if (!Array.isArray(parsed)) return null;
+          return parsed.map(sanitizeMinePin).filter(Boolean);
+        } catch { return null; }
+      };
+      const v2 = tryKey(STORE);
+      if (v2) return v2;
+      const bak = tryKey(STORE_BAK);
+      if (bak) {
+        try { localStorage.setItem(STORE, JSON.stringify(bak)); } catch (_) {}
+        return bak;
+      }
+      const v1raw = tryKey("gfl-my-pins-v1");
+      if (v1raw) return v1raw;
+      return [];
+    };
+    /** Persist personal pins. Never silently wipe — only writes a validated array. */
+    const saveMine = (arr) => {
+      if (!Array.isArray(arr)) return;
+      const clean = arr.map(sanitizeMinePin).filter(Boolean);
+      try {
+        const json = JSON.stringify(clean);
+        localStorage.setItem(STORE, json);
+        try { localStorage.setItem(STORE_BAK, json); } catch (_) {}
+      } catch (err) {
+        alert("Could not save your pins on this phone. Storage may be full or blocked.");
+      }
+    };
+    const pinKey = (p) => p.custom && p.id ? String(p.id) : (p.name + "|" + p.lat + "|" + p.lng);
+    const loadHidden = () => {
+      try {
+        const arr = JSON.parse(localStorage.getItem(HIDDEN_STORE) || "[]");
+        return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === "string") : []);
+      } catch { return new Set(); }
+    };
+    const saveHidden = (set) => localStorage.setItem(HIDDEN_STORE, JSON.stringify([...set]));
+    let hidden = loadHidden();
+    let myMapOnly = true;
+    try { myMapOnly = localStorage.getItem(MY_MAP_ONLY_KEY) !== "0"; } catch (_) {}
+    const myMapOnlyBtn = document.getElementById("myMapOnly");
+    function syncMyMapOnlyBtn() {
+      myMapOnlyBtn.classList.toggle("on", myMapOnly);
+      myMapOnlyBtn.setAttribute("aria-pressed", myMapOnly ? "true" : "false");
+    }
+    syncMyMapOnlyBtn();
+    myMapOnlyBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      myMapOnly = !myMapOnly;
+      try { localStorage.setItem(MY_MAP_ONLY_KEY, myMapOnly ? "1" : "0"); } catch (_) {}
+      syncMyMapOnlyBtn();
+      // Pages has no live community feed; toggle still re-renders so the preference is obvious.
+      render(currentFilter());
+    });
+    const restoreHiddenBtn = document.getElementById("restoreHidden");
+    function syncRestoreHidden() {
+      restoreHiddenBtn.style.display = hidden.size > 0 ? "inline-block" : "none";
+    }
+    restoreHiddenBtn.addEventListener("click", () => {
+      hidden = new Set();
+      saveHidden(hidden);
+      syncRestoreHidden();
+      render(currentFilter());
+    });
+    document.getElementById("exportPins").addEventListener("click", () => {
+      const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        source: "greers-ferry-pages",
+        pins: mine.map(sanitizeMinePin).filter(Boolean)
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "greers-ferry-my-pins-" + new Date().toISOString().slice(0, 10) + ".json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    document.getElementById("importPins").addEventListener("click", () => {
+      document.getElementById("importPinsFile").click();
+    });
+    document.getElementById("importPinsFile").addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result || ""));
+          const list = Array.isArray(parsed) ? parsed : (parsed && Array.isArray(parsed.pins) ? parsed.pins : null);
+          if (!list) { alert("That file has no valid pins."); return; }
+          const incoming = list.map(sanitizeMinePin).filter(Boolean);
+          if (!incoming.length) { alert("That file has no valid pins."); return; }
+          const byId = new Map(mine.map((p) => [String(p.id), p]));
+          incoming.forEach((p) => byId.set(String(p.id), p));
+          mine = [...byId.values()];
+          saveMine(mine);
+          render(currentFilter());
+          alert("Imported " + incoming.length + " pin" + (incoming.length === 1 ? "" : "s") + " onto this phone.");
+        } catch (_) {
+          alert("Could not read that JSON file.");
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    const HIST_SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer";
+    /* Mountain View 125k (Stark on the sheet) + Batesville 125k fill east of the neatline. */
+    const HIST_FILL = {
+      mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
+      where: "Map_Name = 'Batesville' AND Map_Scale = 125000 AND Imprint_Year >= 1920",
+      sortField: "Imprint_Year", sortValue: "1942", ascending: false
+    };
+    const HIST_DETAIL = {
+      mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
+      where: "Map_Name = 'Mountain View' AND Map_Scale = 125000 AND Imprint_Year >= 1930",
+      sortField: "Imprint_Year", sortValue: "1949", ascending: false
+    };
+    const WEB_MERCATOR_HALF = 20037508.342789244;
+    function historicalTileUrl(coords, rule) {
+      const z = coords.z, x = coords.x, y = coords.y, tileSize = 256;
+      const n = Math.pow(2, z);
+      const size = (2 * WEB_MERCATOR_HALF) / n;
+      const xmin = -WEB_MERCATOR_HALF + x * size;
+      const ymax = WEB_MERCATOR_HALF - y * size;
+      const xmax = xmin + size;
+      const ymin = ymax - size;
+      const mosaicRule = encodeURIComponent(JSON.stringify(rule));
+      return HIST_SERVER + "/exportImage"
+        + "?bbox=" + xmin + "," + ymin + "," + xmax + "," + ymax
+        + "&bboxSR=3857&imageSR=3857&size=" + tileSize + "," + tileSize
+        + "&format=png32&transparent=true&interpolation=RSP_BilinearInterpolation"
+        + "&mosaicRule=" + mosaicRule + "&f=image";
+    }
+    function makeHistTile(rule) {
+      const layer = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", {
+        maxZoom: 18, maxNativeZoom: 16, minZoom: 10, opacity: 1,
+        pane: "historical", attribution: "USGS Historical Topographic Maps",
+        detectRetina: false, updateWhenIdle: true, keepBuffer: 2
+      });
+      layer.getTileUrl = function (coords) { return historicalTileUrl(coords, rule); };
+      return layer;
+    }
+
+    const map = L.map("map", {
+      zoomControl: true,
+      rotate: true, bearing: 0, touchRotate: true, rotateControl: false,
+    }).setView([35.53, -92.17], 11);
+    window.__gflMap = map;
+    map.createPane("historical", map.getPane("rotatePane") || map.getPane("mapPane"));
+    map.getPane("historical").style.zIndex = 350;
+    map.createPane("geology", map.getPane("rotatePane") || map.getPane("mapPane"));
+    map.getPane("geology").style.zIndex = 360;
+    map.createPane("labels", map.getPane("rotatePane") || map.getPane("mapPane"));
+    map.getPane("labels").style.zIndex = 450;
+    map.createPane("parcels", map.getPane("rotatePane") || map.getPane("mapPane"));
+    map.getPane("parcels").style.zIndex = 420;
+    document.getElementById("btn3d").addEventListener("click", function (e) {
+      e.preventDefault();
+      const c = map.getCenter();
+      location.href = "3d.html#" + map.getZoom().toFixed(2) + "/" + c.lat.toFixed(5) + "/" + c.lng.toFixed(5);
+    });
+
+    /* North / reset-rotation button (touch: two-finger twist rotates; desktop: shift+drag or this button). */
+    const NorthCtl = L.Control.extend({
+      options: { position: "topleft" },
+      onAdd: function () {
+        const a = L.DomUtil.create("a", "gfl-north");
+        a.href = "#"; a.title = "Reset north"; a.setAttribute("role", "button"); a.setAttribute("aria-label", "Reset north");
+        a.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M12 2l5 10h-10z" fill="#d33"/><path d="M12 22l-5-10h10z" fill="#888"/></svg>';
+        const c = L.DomUtil.create("div", "leaflet-bar leaflet-control gfl-north-wrap");
+        c.appendChild(a);
+        L.DomEvent.disableClickPropagation(c);
+        L.DomEvent.on(a, "click", function (e) { L.DomEvent.preventDefault(e); map.setBearing(0); });
+        map.on("rotate", function () { a.firstChild.style.transform = "rotate(" + (-map.getBearing()) + "deg)"; });
+        return c;
+      }
+    });
+    new NorthCtl().addTo(map);
+
+    const basemaps = {
+      streets: L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "&copy; OpenStreetMap" }),
+      sat: L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Esri" }),
+      topo: L.tileLayer("https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, attribution: "USGS" })
+    };
+    const labelLayer = L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, pane: "labels", opacity: 0.95, attribution: "Esri labels" }
+    );
+    const streetLabelLayer = L.tileLayer(
+      "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}",
+      { maxZoom: 19, minZoom: 13, pane: "labels", opacity: 0.9, attribution: "Esri" }
+    );
+
+    // Keep each sheet at opacity 1 so PNG alpha collars composite; fade the pane.
+    /* Before the dam: Esri USA Topo Maps (USGS historic quads, Stark printed in red). */
+    const histLayer = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/USA_Topo_Maps/MapServer/tile/{z}/{y}/{x}", {
+      maxZoom: 18, maxNativeZoom: 15, minZoom: 8, opacity: 1,
+      pane: "historical", attribution: "USGS historic topo via Esri",
+      detectRetina: false, updateWhenIdle: true, keepBuffer: 2
+    });
+    function setHistOpacity(o) {
+      map.getPane("historical").style.opacity = String(o);
+    }
+
+    // USGS national geology (Earth surface), same source as the Explorer map.
+    const GEO_UNITS = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/National_Earth_Surface_v2/FeatureServer/6";
+    const GEO_DMU = "https://services.arcgis.com/v01gqwM5QqNysAAi/arcgis/rest/services/National_Earth_Surface_v2/FeatureServer/8";
+    const geoLoadingEl = document.getElementById("geoLoading");
+    let geoColors = {}, geoDmu = {}, geoInfoP = null, geoDictP = null;
+    function geoInfo() {
+      if (!geoInfoP) geoInfoP = fetch(GEO_UNITS + "?f=json").then((r) => r.json()).catch((e) => { geoInfoP = null; throw e; });
+      return geoInfoP;
+    }
+    function rgbHex(c) {
+      if (!c || c.length < 3) return "#88aacc";
+      const h = (n) => ("0" + Math.max(0, Math.min(255, n | 0)).toString(16)).slice(-2);
+      return "#" + h(c[0]) + h(c[1]) + h(c[2]);
+    }
+    function geoDict() {
+      if (!geoDictP) {
+        geoDictP = Promise.all([
+          geoInfo(),
+          fetch(GEO_DMU + "/query?where=1%3D1&outFields=MapUnit,Name,FullName,Age,Description,GeoMaterial,Symbol&returnGeometry=false&resultRecordCount=2000&f=json").then((r) => r.json())
+        ]).then(([info, dmuJson]) => {
+          const rend = ((info || {}).drawingInfo || {}).renderer || {};
+          (rend.uniqueValueInfos || []).forEach((i) => { if (i.value != null && i.symbol && i.symbol.color) geoColors[String(i.value)] = rgbHex(i.symbol.color); });
+          ((dmuJson && dmuJson.features) || []).forEach((f) => { const a = f.attributes || {}; if (a.MapUnit) geoDmu[String(a.MapUnit)] = a; });
+        }).catch((e) => { geoDictP = null; throw e; });
+      }
+      return geoDictP;
+    }
+    function geoStyle(f) {
+      const mu = String((f.properties && (f.properties.MapUnit || f.properties.mapunit)) || "");
+      return { color: "#1e3a4c", weight: 0.4, fillColor: geoColors[mu] || "#80b3ff", fillOpacity: 0.55, opacity: 0.9 };
+    }
+    const geoPaneEl = map.getPane("geology");
+    const GeoFL = (L.esri && L.esri.FeatureLayer) ? L.esri.FeatureLayer.extend({
+      _addFeatures: function (features, coords) { this._gflZ = coords ? coords.z : 99; return L.esri.FeatureLayer.prototype._addFeatures.call(this, features, coords); },
+      createNewLayer: function (g) { const l = L.esri.FeatureLayer.prototype.createNewLayer.call(this, g); if (l) l._gflZ = this._gflZ; return l; },
+      _updateLayer: function (layer, g) {
+        if (layer._gflZ != null && this._gflZ <= layer._gflZ) return;
+        layer._gflZ = this._gflZ;
+        return L.esri.FeatureLayer.prototype._updateLayer.call(this, layer, g);
+      }
+    }) : null;
+    const geoLayer = GeoFL ? new GeoFL({
+      url: GEO_UNITS, pane: "geology",
+      renderer: L.canvas({ pane: "geology", padding: 0.5, tolerance: 3 }),
+      fields: ["OBJECTID", "MapUnit", "Label"],
+      precision: 5, simplifyFactor: 0.5, cellSize: 1024,
+      style: geoStyle,
+      interactive: false,
+      attribution: "Geology © USGS / AASG National Geologic Map"
+    }) : null;
+    if (geoLayer) {
+      geoLayer.service.metadata = function (cb, ctx) { geoInfo().then((m) => cb.call(ctx, null, m), (e) => cb.call(ctx, e)); return this; };
+      const updGeoLoading = () => geoLoadingEl.classList.toggle("on", !!(geoLayer._activeRequests > 0 && map.hasLayer(geoLayer)));
+      geoLayer.on("loading load", updGeoLoading);
+      geoLayer.on("remove", () => geoLoadingEl.classList.remove("on"));
+    }
+    // opacity slider drives the geology pane (never restyles polygons)
+    geoLayer && Object.assign(geoLayer, { setOpacity(o) { geoPaneEl.style.opacity = String(o); return this; } });
+
+    /* Parcels & owners: Arkansas GIS Office statewide cadastre (county assessor data). */
+    const PARCEL_URL = "https://gis.arkansas.gov/arcgis/rest/services/AGFC/AGFC_Cadastre_Viewer/FeatureServer/2";
+    const parcelLayer = (L.esri && L.esri.featureLayer) ? L.esri.featureLayer({
+      url: PARCEL_URL, pane: "parcels", minZoom: 15,
+      renderer: L.svg({ pane: "parcels", padding: 0.5 }),
+      fields: ["objectid", "parcelid", "ownername", "adrlabel", "adrnum", "pstrnam", "pstrtype", "adrcity", "county"],
+      precision: 6, simplifyFactor: 0.3,
+      style: function () { return { color: "#ffd24a", weight: 1.2, fill: true, fillColor: "#ffd24a", fillOpacity: 0.06 }; },
+      attribution: "Parcels: Arkansas GIS Office / county assessors"
+    }) : null;
+    if (parcelLayer) {
+      parcelLayer.bindPopup(function (layer) {
+        const p = layer.feature.properties || {};
+        const addr = p.adrlabel || [p.adrnum, p.pstrnam, p.pstrtype, p.adrcity].filter(Boolean).join(" ");
+        return '<div><b>' + esc(p.ownername || "Owner not listed") + '</b><br>Parcel ID: ' + esc(p.parcelid || "—")
+          + '<br>Address: ' + esc(addr || "—") + (p.county ? '<br>County: ' + esc(p.county) : '')
+          + '<br><small style="opacity:.75">Not a legal boundary · Arkansas GIS Office / county assessors</small></div>';
+      }, { maxWidth: 260 });
+    }
+    const parPaneEl = map.getPane("parcels");
+    let parOn = false;
+    function syncParNote() { document.getElementById("parNote").classList.toggle("show", parOn && map.getZoom() < 15); }
+    map.on("zoomend", syncParNote);
+
+    let currentBase = basemaps.streets.addTo(map);
+    let histOn = false;
+    let geoOn = false;
+    let addMode = false;
+    let identifyAbort = null;
+    const histOpacityEl = document.getElementById("histOpacity");
+    const geoOpacityEl = document.getElementById("geoOpacity");
+    const histFade = document.getElementById("histFade");
+    const geoFade = document.getElementById("geoFade");
+    const histPct = document.getElementById("histPct");
+    const geoPct = document.getElementById("geoPct");
+    const geoHint = document.getElementById("geoHint");
+    const geoCard = document.getElementById("geoCard");
+    const geoCardBody = document.getElementById("geoCardBody");
+    function closeGeoCard() {
+      geoCard.classList.remove("show");
+      geoCardBody.innerHTML = "";
+      if (identifyAbort) identifyAbort.abort();
+      if (typeof syncOverlayChrome === "function") syncOverlayChrome();
+    }
+    document.getElementById("geoCardClose").addEventListener("click", closeGeoCard);
+
+    function syncLabels() {
+      const want = currentBase !== basemaps.streets;
+      if (want) {
+        if (!map.hasLayer(labelLayer)) labelLayer.addTo(map);
+        if (!map.hasLayer(streetLabelLayer)) streetLabelLayer.addTo(map);
+      } else {
+        if (map.hasLayer(labelLayer)) map.removeLayer(labelLayer);
+        if (map.hasLayer(streetLabelLayer)) map.removeLayer(streetLabelLayer);
+      }
+    }
+
+    function syncOverlayChrome() {
+      document.getElementById("parFade").classList.toggle("show", parOn);
+      document.getElementById("parPct").textContent = String(Math.round(Number(document.getElementById("parOpacity").value) * 100));
+      syncParNote();
+      histFade.classList.toggle("show", histOn);
+      geoFade.classList.toggle("show", geoOn);
+      const geoCardOpen = geoCard.classList.contains("show");
+      geoHint.classList.toggle("show", geoOn && !addMode && !geoCardOpen);
+      histPct.textContent = String(Math.round(Number(histOpacityEl.value) * 100));
+      geoPct.textContent = String(Math.round(Number(geoOpacityEl.value) * 100));
+    }
+
+    histOpacityEl.addEventListener("input", () => {
+      setHistOpacity(Number(histOpacityEl.value));
+      syncOverlayChrome();
+    });
+    geoOpacityEl.addEventListener("input", () => {
+      geoLayer.setOpacity(Number(geoOpacityEl.value));
+      syncOverlayChrome();
+    });
+
+    document.getElementById("parOpacity").addEventListener("input", () => {
+      parPaneEl.style.opacity = document.getElementById("parOpacity").value;
+      syncOverlayChrome();
+    });
+    document.getElementById("basemap").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-base]");
+      if (!btn) return;
+      document.querySelectorAll("#basemap .tool").forEach((b) => b.classList.remove("on"));
+      btn.classList.add("on");
+      map.removeLayer(currentBase);
+      currentBase = basemaps[btn.dataset.base].addTo(map);
+      syncLabels();
+    });
+
+    document.getElementById("overlays").addEventListener("click", (e) => {
+      if (e.target.closest("input, label.fade-wrap")) return;
+      const btn = e.target.closest("[data-overlay]");
+      if (!btn) return;
+      const id = btn.dataset.overlay;
+      if (id === "hist") {
+        histOn = !histOn;
+        btn.classList.toggle("on", histOn);
+        btn.setAttribute("aria-pressed", histOn ? "true" : "false");
+        if (histOn) {
+          setHistOpacity(Number(histOpacityEl.value));
+          histLayer.addTo(map);
+        } else map.removeLayer(histLayer);
+      } else if (id === "parcels") {
+        parOn = !parOn;
+        btn.classList.toggle("on", parOn);
+        btn.setAttribute("aria-pressed", parOn ? "true" : "false");
+        if (parOn) {
+          if (!parcelLayer) { alert("Parcel layer failed to load."); parOn = false; btn.classList.remove("on"); return; }
+          parPaneEl.style.opacity = document.getElementById("parOpacity").value;
+          parcelLayer.addTo(map);
+        } else if (parcelLayer) { map.removeLayer(parcelLayer); map.closePopup(); }
+      } else if (id === "geo") {
+        geoOn = !geoOn;
+        btn.classList.toggle("on", geoOn);
+        btn.setAttribute("aria-pressed", geoOn ? "true" : "false");
+        if (geoOn) {
+          if (!geoLayer) { alert("Geology layer failed to load (esri-leaflet unavailable)."); geoOn = false; btn.classList.remove("on"); btn.setAttribute("aria-pressed","false"); return; }
+          geoLayer.setOpacity(Number(geoOpacityEl.value));
+          geoDict().then(() => { if (geoOn) geoLayer.setStyle(geoStyle); }).catch(() => {});
+          geoLayer.addTo(map);
+        } else {
+          if (geoLayer) map.removeLayer(geoLayer);
+          closeGeoCard();
+        }
+      }
+      syncOverlayChrome();
+    });
+
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+    }
+    function geoUnitHtml(props, d) {
+      const mu = String(props.MapUnit || "");
+      const title = d.Name || d.FullName || props.Label || mu || "Geologic unit";
+      const swatch = geoColors[mu] ? '<span class="lf-geo-swatch" style="background:' + esc(geoColors[mu]) + '"></span>' : "";
+      let rows = "";
+      if (d.GeoMaterial) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Material</span><span class="lf-geo-v">' + esc(d.GeoMaterial) + "</span></div>";
+      if (d.Age) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Age</span><span class="lf-geo-v">' + esc(d.Age) + "</span></div>";
+      if (mu) rows += '<div class="lf-geo-row"><span class="lf-geo-k">Unit</span><span class="lf-geo-v">' + esc(mu) + "</span></div>";
+      const expl = d.Description ? '<p class="lf-geo-expl">' + esc(d.Description) + "</p>" : "";
+      return '<div class="lf-geo-popup"><div class="lf-geo-title">' + swatch + "<strong>" + esc(title) + "</strong></div>"
+        + rows + expl
+        + '<p class="lf-geo-credit">USGS Cooperative National Geologic Map · tap elsewhere to identify another area</p></div>';
+    }
+    let identifyTok = 0;
+    async function identifyAt(latlng) {
+      const tok = ++identifyTok;
+      closeDetail();
+      geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">Looking up geology…</p></div>';
+      geoCard.classList.add("show");
+      syncOverlayChrome();
+      try {
+        const url = GEO_UNITS + "/query?geometry=" + encodeURIComponent(latlng.lng + "," + latlng.lat)
+          + "&where=1%3D1&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&outFields=MapUnit,Label&returnGeometry=false&f=json";
+        const [res] = await Promise.all([fetch(url).then((r) => { if (!r.ok) throw new Error("Geology lookup failed (" + r.status + ")"); return r.json(); }), geoDict().catch(() => {})]);
+        if (tok !== identifyTok) return;
+        const f = res.features && res.features[0];
+        if (!f) { geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">No geologic unit found here.</p></div>'; return; }
+        const p = f.attributes || {};
+        geoCardBody.innerHTML = geoUnitHtml(p, geoDmu[String(p.MapUnit || "")] || {});
+      } catch (err) {
+        if (tok !== identifyTok) return;
+        geoCardBody.innerHTML = '<div class="lf-geo-popup"><p class="lf-geo-expl">' + esc((err && err.message) || "Lookup failed") + "</p></div>";
+      }
+    }
+
+    let mine = loadMine();
+    let addKind = "cove";
+    let selectedPlace = null;
+    let detailEditing = false;
+    const markers = [];
+    const detailEl = document.getElementById("detail");
+    const addMenu = document.getElementById("addMenu");
+    function allPlaces() {
+      return builtIn
+        .map((p) => ({ ...p, custom: false }))
+        .concat(mine.map((p) => ({ ...p, custom: true })))
+        .filter((p) => p.custom || !hidden.has(pinKey(p)));
+    }
+    function clearMarkers() {
+      markers.forEach((m) => map.removeLayer(m));
+      markers.length = 0;
+    }
+    function placePopupHtml(p) {
+      const bits = [`<strong>${esc(p.name)}</strong>`];
+      bits.push(`<div style="font-size:11px;color:#7ed0c8;margin:2px 0 4px">${esc(TYPE_LABEL[p.type] || p.type)}</div>`);
+      if (p.note) bits.push(esc(p.note));
+      if (p.address) bits.push(`<div style="margin-top:4px"><b>Address</b><br>${esc(p.address)}</div>`);
+      if (p.phone) bits.push(`<div style="margin-top:4px"><b>Phone</b> · <a href="tel:${esc(String(p.phone).replace(/\\D/g, ""))}">${esc(p.phone)}</a></div>`);
+      if (p.value) bits.push(`<div style="margin-top:4px"><b>Reading</b> · ${esc(p.value)}</div>`);
+      bits.push(`<br><a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>`);
+      bits.push(` · <a href="#" data-open-detail="${esc(p.custom ? p.id : p.name)}">Open info</a>`);
+      return bits.join("");
+    }
+    function addMarker(p) {
+      const color = colors[p.type] || colors.cove;
+      const m = L.circleMarker([p.lat, p.lng], {
+        radius: p.custom ? 9 : 6, color: "#08323c", weight: 1, fillColor: color, fillOpacity: 0.95
+      }).addTo(map);
+      m.bindPopup(placePopupHtml(p));
+      m.place = p;
+      m.on("click", (ev) => {
+        L.DomEvent.stopPropagation(ev);
+        openDetail(p);
+      });
+      markers.push(m);
+    }
+    function currentFilter() {
+      return document.querySelector(".chip.on")?.dataset.type || "all";
+    }
+    function render(type) {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      clearMarkers();
+      allPlaces().filter((p) => {
+        if (type === "all") return true;
+        if (type === "mine") return !!p.custom;
+        return p.type === type;
+      }).forEach((p) => {
+        addMarker(p);
+        const el = document.createElement("div");
+        el.className = "item";
+        el.innerHTML = `
+          <div class="dot" style="background:${colors[p.type] || colors.cove}"></div>
+          <div>
+            <h3>${esc(p.name)}</h3>
+            <p>${esc(p.note || p.value || "")}</p>
+            <a href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Apple Maps</a>
+          </div>
+          <div class="actions">
+            <button data-go="${esc(p.custom ? p.id : p.name)}">Show</button>
+            ${p.custom ? `<button data-del="${esc(p.id)}">Delete</button>` : ""}
+          </div>`;
+        list.appendChild(el);
+      });
+    }
+    render("all");
+    syncRestoreHidden();
+
+    function closeDetail() {
+      selectedPlace = null;
+      detailEditing = false;
+      detailEl.classList.remove("show");
+      detailEl.innerHTML = "";
+    }
+    function openDetail(p, editing) {
+      closeGeoCard();
+      selectedPlace = p;
+      detailEditing = !!editing;
+      const kind = TYPE_LABEL[p.type] || p.type;
+      if (detailEditing && p.custom) {
+        detailEl.innerHTML = `
+          <div class="meta">Edit · ${esc(kind)}</div>
+          <h3>${esc(p.name)}</h3>
+          ${(p.type === "depth" || p.type === "temperature") ? `<input id="dValue" value="${esc(p.value || "")}" placeholder="${p.type === "depth" ? "Depth e.g. 42 ft" : "Temp e.g. 78°F"}" />` : ""}
+          <input id="dName" value="${esc(p.name)}" placeholder="Name" />
+          <input id="dNote" value="${esc(p.note || "")}" placeholder="Optional note" />
+          <div class="btns">
+            <button type="button" id="dSave">Save</button>
+            <button type="button" id="dCancelEdit">Cancel</button>
+            <button type="button" class="danger" id="dDelete">Delete</button>
+          </div>`;
+      } else {
+        detailEl.innerHTML = `
+          <div class="meta">${esc(kind)}${p.custom ? " · My pin (editable)" : " · Official map pin"}</div>
+          <h3>${esc(p.name)}</h3>
+          ${p.note ? `<p>${esc(p.note)}</p>` : ""}
+          ${p.value ? `<div class="row"><span>Reading · </span>${esc(p.value)}</div>` : ""}
+          ${p.address ? `<div class="row"><span>Address · </span>${esc(p.address)}</div>` : ""}
+          ${p.phone ? `<div class="row"><span>Phone · </span><a href="tel:${esc(String(p.phone).replace(/\\D/g, ""))}">${esc(p.phone)}</a></div>` : ""}
+          <div class="row"><span>Coords · </span>${p.lat.toFixed(5)}°N ${Math.abs(p.lng).toFixed(5)}°W</div>
+          <p style="margin-top:8px;font-size:11px;color:var(--muted)">${
+            p.custom
+              ? "This is your pin — you can edit or delete it."
+              : "Official lake map pin. Remove from my map hides it on this phone only."
+          }</p>
+          <div class="btns">
+            <a class="tool" style="text-decoration:none;display:inline-block" href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>
+            ${p.custom
+              ? `<button type="button" id="dEdit">Edit</button><button type="button" class="danger" id="dDelete">Delete pin</button>`
+              : `<button type="button" class="danger" id="dHide">Remove from my map</button>`}
+            <button type="button" id="dClose">Close</button>
+          </div>`;
+      }
+      detailEl.classList.add("show");
+      setSheet("min");
+    }
+    detailEl.addEventListener("click", (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLElement)) return;
+      if (t.id === "dClose") { closeDetail(); return; }
+      if (t.id === "dCancelEdit" && selectedPlace) { openDetail(selectedPlace, false); return; }
+      if (t.id === "dEdit" && selectedPlace) { openDetail(selectedPlace, true); return; }
+      if (t.id === "dDelete" && selectedPlace?.custom) {
+        if (!confirm('Delete "' + selectedPlace.name + '"? This removes your pin from this phone.')) return;
+        mine = mine.filter((p) => p.id !== selectedPlace.id);
+        saveMine(mine);
+        closeDetail();
+        render(currentFilter());
+        syncRestoreHidden();
+        return;
+      }
+      if (t.id === "dHide" && selectedPlace && !selectedPlace.custom) {
+        if (!confirm('Remove "' + selectedPlace.name + '" from your map? It stays on the shared lake map — only hidden on this phone.')) return;
+        hidden.add(pinKey(selectedPlace));
+        saveHidden(hidden);
+        closeDetail();
+        render(currentFilter());
+        syncRestoreHidden();
+        return;
+      }
+      if (t.id === "dSave" && selectedPlace?.custom) {
+        const name = (document.getElementById("dName")?.value || "").trim();
+        const note = (document.getElementById("dNote")?.value || "").trim();
+        const value = (document.getElementById("dValue")?.value || "").trim();
+        if (name.length < 2) { alert("Use a name with at least 2 characters."); return; }
+        mine = mine.map((p) => p.id === selectedPlace.id ? { ...p, name, note: note || p.note, value: value || p.value } : p);
+        saveMine(mine);
+        const updated = mine.find((p) => p.id === selectedPlace.id);
+        render(currentFilter());
+        if (updated) openDetail({ ...updated, custom: true }, false);
+      }
+    });
+
+    document.querySelector(".filters").addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip || chip.id === "myMapOnly") return;
+      document.querySelectorAll(".chip[data-type]").forEach((c) => c.classList.remove("on"));
+      chip.classList.add("on");
+      closeDetail();
+      render(chip.dataset.type);
+    });
+
+    document.getElementById("list").addEventListener("click", (e) => {
+      const del = e.target.closest("[data-del]");
+      if (del) {
+        if (!confirm("Delete this pin?")) return;
+        mine = mine.filter((p) => p.id !== del.dataset.del);
+        saveMine(mine);
+        closeDetail();
+        render(currentFilter());
+        return;
+      }
+      const btn = e.target.closest("[data-go]");
+      if (!btn) return;
+      const key = btn.dataset.go;
+      const p = allPlaces().find((x) => (x.custom ? x.id : x.name) === key);
+      if (!p) return;
+      map.setView([p.lat, p.lng], 15);
+      openDetail(p);
+      const mk = markers.find((m) => m.place === p || (m.place.name === p.name && m.place.lat === p.lat));
+      if (mk) mk.openPopup();
+    });
+
+    map.on("popupopen", (e) => {
+      const node = e.popup.getElement();
+      if (!node) return;
+      node.querySelectorAll("[data-open-detail]").forEach((a) => {
+        a.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          const key = a.getAttribute("data-open-detail");
+          const p = allPlaces().find((x) => (x.custom ? x.id : x.name) === key);
+          if (p) openDetail(p);
+        });
+      });
+    });
+
+    const addBtn = document.getElementById("addPin");
+    const banner = document.getElementById("banner");
+    function setAddMode(on, kind) {
+      addMode = on;
+      if (kind) addKind = kind;
+      addBtn.classList.toggle("on", on);
+      banner.classList.toggle("show", on);
+      addMenu.classList.remove("show");
+      const labels = {
+        cove: "Tap the map to drop a cove name",
+        depth: "Tap the map to drop a water-depth reading",
+        temperature: "Tap the map to drop a temperature reading",
+        hazard: "Tap the map to mark a hazard",
+        pin: "Tap the map to drop a custom pin"
+      };
+      banner.textContent = labels[addKind] || "Tap the map to drop your pin";
+      syncOverlayChrome();
+    }
+    addBtn.addEventListener("click", () => {
+      if (addMode) { setAddMode(false); return; }
+      addMenu.classList.toggle("show");
+    });
+    addMenu.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-add]");
+      if (!btn) return;
+      setAddMode(true, btn.dataset.add);
+    });
+    document.addEventListener("click", (e) => {
+      if (!addMenu.classList.contains("show")) return;
+      if (e.target.closest("#addMenu, #addPin")) return;
+      addMenu.classList.remove("show");
+    });
+    map.on("click", (ev) => {
+      if (addMode) {
+        let name = "";
+        let value = "";
+        let note = "";
+        if (addKind === "depth") {
+          value = prompt("Water depth (feet)") || "";
+          if (!value.trim()) { setAddMode(false); return; }
+          name = prompt("Optional label") || value.trim();
+          note = prompt("Optional note") || "";
+        } else if (addKind === "temperature") {
+          value = prompt("Water temperature (°F)") || "";
+          if (!value.trim()) { setAddMode(false); return; }
+          name = prompt("Optional label") || value.trim();
+          note = prompt("Optional note") || "";
+        } else if (addKind === "hazard") {
+          name = prompt("Hazard name (e.g. Stump field)") || "";
+          if (!name.trim()) { setAddMode(false); return; }
+          note = prompt("Optional note") || "";
+        } else {
+          name = prompt(addKind === "cove" ? "Cove name" : "Pin name") || "";
+          if (!name.trim()) { setAddMode(false); return; }
+          note = prompt("Optional note") || "";
+        }
+        const pin = {
+          id: String(Date.now()),
+          name: name.trim(),
+          type: addKind,
+          lat: ev.latlng.lat,
+          lng: ev.latlng.lng,
+          note: note.trim(),
+          value: value.trim()
+        };
+        mine.push(pin);
+        saveMine(mine);
+        setAddMode(false);
+        document.querySelectorAll(".chip[data-type]").forEach((c) => c.classList.toggle("on", c.dataset.type === "mine"));
+        render("mine");
+        openDetail({ ...pin, custom: true });
+        return;
+      }
+      // ignore map clicks that hit markers (they open detail themselves)
+      if (geoOn && !(parOn && map.getZoom() >= 15)) {
+        void identifyAt(ev.latlng);
+      }
+    });
+    syncOverlayChrome();
+
+    document.getElementById("locate").addEventListener("click", () => {
+      if (!navigator.geolocation) return alert("Location not available.");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          L.circleMarker([pos.coords.latitude, pos.coords.longitude], { radius: 8, fillColor: "#fff", color: "#e8c56b", weight: 2, fillOpacity: 1 }).addTo(map)
+            .bindPopup("You are here").openPopup();
+          map.setView([pos.coords.latitude, pos.coords.longitude], 13);
+        },
+        () => alert("Turn on Location for Safari.")
+      );
+    });
+
+    const sheet = document.getElementById("sheet");
+    const toggle = document.getElementById("toggleSheet");
+    const states = ["min", "mid", "full"];
+    function setSheet(state) {
+      sheet.classList.remove("min", "mid", "full");
+      sheet.classList.add(state);
+      toggle.textContent = state === "min" ? "Show list" : "Hide list";
+    }
+    toggle.addEventListener("click", () => setSheet(sheet.classList.contains("min") ? "mid" : "min"));
+    document.getElementById("handle").addEventListener("click", () => {
+      const cur = states.find((s) => sheet.classList.contains(s)) || "mid";
+      setSheet(states[(states.indexOf(cur) + 1) % states.length]);
+    });
+  </script>
+</body>
+</html>
