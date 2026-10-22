@@ -185,6 +185,9 @@
   .wr-form .acts{display:flex;gap:6px;justify-content:flex-end}.wr-form button,.wr-pop button{border:1px solid #1f6276;background:#124d60;color:#f4f7f8;border-radius:8px;padding:6px 10px;font:13px system-ui,sans-serif}
   .wr-form button.danger,.wr-pop button.danger{background:#7a2330}.wr-form .grow{margin-right:auto}
   .wr-pop .acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.wr-meta{font-size:11px;color:#9fc3cc;margin-top:4px}.live-pop a{color:#7bdff2}.live-pop div+div{margin-top:4px}
+.stark-ico{background:#f3e3c3;border:2px solid #6b4423;border-radius:50%;color:#5a3a1a;font:bold 13px Georgia,serif;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(60,35,10,.5)}
+.stark-pop{font:13px/1.4 Georgia,serif;color:#f3e7d0;max-width:250px}.stark-pop a{color:#f0c987}.stark-pop h4{color:#f6d9a0}.stark-pop h4{margin:0 0 4px;font-size:14px}.stark-pop .cf{display:inline-block;background:#efe0bf;border-radius:4px;padding:0 5px;font-size:12px;margin:2px 0;color:#4a3015}.stark-pop small{color:#d9c7a8}
+.stark-sec-lbl{background:none;border:none;box-shadow:none;color:#6b4423;font:bold 11px Georgia,serif;text-shadow:0 0 3px #fff}
 </style>
 </head>
 <body>
@@ -242,6 +245,7 @@
         <input type="range" id="parOpacity" min="0.2" max="1" step="0.02" value="0.9" aria-label="Parcels opacity" />
         <span class="pct" id="parPct">90</span>
       </label>
+      <button class="tool" data-overlay="stark" aria-pressed="false">Stark history</button>
     </div>
   </header>
   <a class="gfl-3d" id="btn3d" href="3d.html" title="View in 3D" aria-label="View in 3D">3D</a>
@@ -764,6 +768,32 @@
     // opacity slider drives the geology pane (never restyles polygons)
     geoLayer && Object.assign(geoLayer, { setOpacity(o) { geoPaneEl.style.opacity = String(o); return this; } });
 
+
+    /* Stark history (read-only, sourced from research dossier; not user pins) */
+    map.createPane("starkSec", map.getPane("rotatePane") || map.getPane("mapPane"));
+    map.getPane("starkSec").style.zIndex = 445;
+    map.createPane("starkPts", map.getPane("rotatePane") || map.getPane("mapPane"));
+    map.getPane("starkPts").style.zIndex = 645;
+    const SRC_PAT = '<a href="http://www.argenweb.net/vanburen/land/cleburneland.htm" target="_blank" rel="noopener">BLM patent index (ARGenWeb transcription)</a>';
+    const PAT_NOTE = '<br><small>Patent data from a volunteer transcription, pending confirmation in <a href="https://glorecords.blm.gov" target="_blank" rel="noopener">BLM GLO records</a>. Section outline: <a href="https://geostor.arkansas.gov/arcgis/rest/services/FEATURESERVICES/Planning_Cadastre/MapServer/10" target="_blank" rel="noopener">Arkansas GIS Office PLSS</a>. Exact house site unknown.</small>';
+    const EOA_GF = '<a href="https://encyclopediaofarkansas.net/entries/greers-ferry-cleburne-county-6124/" target="_blank" rel="noopener">Encyclopedia of Arkansas</a>';
+    const STARK_SECS = [{"s":"35","c":[[35.55012,-92.13772],[35.55018,-92.14205],[35.53559,-92.14234],[35.53507,-92.12476],[35.53507,-92.12466],[35.54961,-92.12456],[35.54982,-92.12865],[35.55012,-92.13772]],"o":"Isaac H. Stark"},{"s":"33","c":[[35.55061,-92.15986],[35.55063,-92.16827],[35.55073,-92.1726],[35.55085,-92.17763],[35.5456,-92.17773],[35.54379,-92.17782],[35.54201,-92.17787],[35.53651,-92.17799],[35.53606,-92.16021],[35.54058,-92.16016],[35.55061,-92.15986]],"o":"Pennington W. Stark"},{"s":"21","c":[[35.57944,-92.1592],[35.57956,-92.16712],[35.57977,-92.17707],[35.5675,-92.17725],[35.56526,-92.17723],[35.56517,-92.15949],[35.57944,-92.1592]],"o":"Isaac W. Stark (1860/1861)"},{"s":"26","c":[[35.5647,-92.14184],[35.55488,-92.14204],[35.55018,-92.14205],[35.55012,-92.13772],[35.54982,-92.12865],[35.54961,-92.12456],[35.56423,-92.12462],[35.56434,-92.12875],[35.5647,-92.14184]],"o":"Isaac H. Stark"},{"s":"22","c":[[35.57928,-92.14144],[35.57944,-92.1592],[35.56517,-92.15949],[35.5647,-92.14184],[35.57928,-92.14144]],"o":"Thomas C. Stark (May 1, 1860); James B. Stark"},{"s":"15","c":[[35.59376,-92.14115],[35.59402,-92.15894],[35.57944,-92.1592],[35.57928,-92.14144],[35.59376,-92.14115]],"o":"Thomas C. Stark (Oct 1, 1860)"},{"s":"23","c":[[35.57928,-92.14144],[35.5647,-92.14184],[35.56434,-92.12875],[35.56423,-92.12462],[35.57884,-92.12441],[35.57928,-92.14144]],"o":"James B. Stark"},{"s":"14","c":[[35.59376,-92.14115],[35.57928,-92.14144],[35.57884,-92.12441],[35.58614,-92.12376],[35.59331,-92.12365],[35.59376,-92.14115]],"o":"Luther W. Stark"},{"s":"34","c":[[35.55061,-92.15986],[35.54058,-92.16016],[35.53606,-92.16021],[35.53584,-92.15054],[35.53559,-92.14245],[35.53559,-92.14234],[35.55018,-92.14205],[35.55061,-92.15986]],"o":"Pennington W. Stark"},{"s":"13","c":[[35.59331,-92.12365],[35.58614,-92.12376],[35.57884,-92.12441],[35.5783,-92.10607],[35.57836,-92.10607],[35.59283,-92.10588],[35.59295,-92.11413],[35.59331,-92.12365]],"o":"Charles J. Stark; William C. Stark"},{"s":"12","c":[[35.60806,-92.10554],[35.60847,-92.12336],[35.60335,-92.12355],[35.60068,-92.12366],[35.59331,-92.12365],[35.59295,-92.11413],[35.59283,-92.10588],[35.59292,-92.10587],[35.60806,-92.10554]],"o":"William C. Stark"}];
+    const starkLayer = L.layerGroup();
+    STARK_SECS.forEach(f => {
+      const key = f.s === "15" || f.s === "22";
+      L.polygon(f.c, { pane: "starkSec", color: "#6b4423", weight: key ? 2.5 : 1.5, dashArray: key ? null : "5 4", fillColor: "#c8a46b", fillOpacity: key ? 0.18 : 0.08, interactive: true })
+        .bindPopup('<div class="stark-pop"><h4>Sec ' + f.s + ', T11N R11W</h4>Stark family federal patent(s), 1860–61: ' + f.o + '<br><span class="cf">Confidence: high for the patent</span><br>Source: ' + SRC_PAT + PAT_NOTE + '</div>')
+        .addTo(starkLayer);
+    });
+    const sIcon = (t) => L.divIcon({ className: "stark-ico", html: t, iconSize: [26, 26], iconAnchor: [13, 13], popupAnchor: [0, -12] });
+    const STARK_PTS = [
+      { ll: [35.5676, -92.1767], t: "S", h: '<h4>Stark — likely post office site</h4>Red "Stark" label on the USGS 1:24k topo at the Hwy 16/92 junction, south of Post Oak Church (Sec 21, T11N R11W). Stark post office: Jan 31, 1899 – Jun 30, 1917 (then mail via Shiloh).<br><span class="cf">Map label: high confidence · Post office here: medium (inferred from the label only)</span><br>Sources: <a href="https://services.arcgisonline.com/arcgis/rest/services/USA_Topo_Maps/MapServer" target="_blank" rel="noopener">USGS topo (Esri USA_Topo_Maps)</a>; ' + EOA_GF + '.<br><small>Postmasters and the official site report are in NARA M841 (Arkansas State Archives microfilm MG02093/MG02100). No general store is documented at Stark; Post Oak had a store just north, location not recorded.</small>' },
+      { ll: [35.5736, -92.1487], t: "T", h: '<h4>Thomas C. Stark patent — May 1, 1860</h4>Sec 22, T11N R11W (marker at section center). Thomas C. Stark is described as the first settler (1850s) of the present Greers Ferry area (' + EOA_GF + ').<br><span class="cf">Confidence: high for the patent</span><br>Source: ' + SRC_PAT + PAT_NOTE },
+      { ll: [35.5881, -92.1484], t: "T", h: '<h4>Thomas C. Stark patent — Oct 1, 1860</h4>Sec 15, T11N R11W (marker at section center).<br><span class="cf">Confidence: high for the patent</span><br>Source: ' + SRC_PAT + PAT_NOTE },
+      { ll: [35.5737, -92.1681], t: "I", h: '<h4>Isaac W. Stark patents — 1860 & 1861</h4>Sec 21, T11N R11W, the same section as the Stark map label (marker at section center).<br><span class="cf">Confidence: high for the patent</span><br>Source: ' + SRC_PAT + PAT_NOTE },
+    ];
+    STARK_PTS.forEach(p => L.marker(p.ll, { pane: "starkPts", icon: sIcon(p.t), keyboard: false }).bindPopup('<div class="stark-pop">' + p.h + '</div>').addTo(starkLayer));
+    let starkOn = false;
     /* Parcels & owners: Arkansas GIS Office statewide cadastre (county assessor data). */
     const PARCEL_URL = "https://gis.arkansas.gov/arcgis/rest/services/AGFC/AGFC_Cadastre_Viewer/FeatureServer/2";
     const parcelLayer = (L.esri && L.esri.featureLayer) ? L.esri.featureLayer({
@@ -869,6 +899,11 @@
           setHistOpacity(Number(histOpacityEl.value));
           histLayer.addTo(map);
         } else map.removeLayer(histLayer);
+      } else if (id === "stark") {
+        starkOn = !starkOn;
+        btn.classList.toggle("on", starkOn);
+        btn.setAttribute("aria-pressed", starkOn ? "true" : "false");
+        if (starkOn) starkLayer.addTo(map); else { map.removeLayer(starkLayer); map.closePopup(); }
       } else if (id === "parcels") {
         parOn = !parOn;
         btn.classList.toggle("on", parOn);
