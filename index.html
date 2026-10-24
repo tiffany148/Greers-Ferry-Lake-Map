@@ -101,6 +101,13 @@
     .detail .btns { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
     .detail .btns button { background: var(--card); color: var(--accent); border: 1px solid #2a6b7c; border-radius: 8px; padding: 7px 10px; font-size: 12px; }
     .detail .btns button.danger { color: #ffb4a8; }
+    .gfl-sws{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0 8px}
+    .gfl-sws .gfl-lbl{flex:0 0 100%;font-size:11px;letter-spacing:.04em;text-transform:uppercase;opacity:.8}
+    .gfl-sws button.gfl-sw{width:30px;height:30px;min-width:30px;border-radius:50%;border:2px solid #ffffff55;padding:0!important;margin:0;cursor:pointer}
+    .gfl-sws button.gfl-sw.on{border-color:#fff;box-shadow:0 0 0 2px #0b3d4d,0 0 0 4px #fff}
+    .gfl-sws button.gfl-sw.def{background:repeating-linear-gradient(45deg,#fff3 0 4px,#0003 4px 8px);width:auto;border-radius:15px;padding:0 10px!important;font-size:11px;color:#fff;height:30px}
+    .gfl-sws input[type=color]{width:34px;height:30px;padding:0;border:2px solid #ffffff55;border-radius:8px;background:none;margin:0}
+    .gfl-sws input[type=color].on{border-color:#fff}
     .detail input, .detail select {
       width: 100%; margin-top: 6px; background: var(--card); color: var(--text);
       border: 1px solid #1f6276; border-radius: 8px; padding: 8px; font-size: 13px;
@@ -143,6 +150,12 @@
       background: #e8c56b; color: #08323c; border-radius: 10px; padding: 8px 10px; font-size: 13px; font-weight: 600; text-align: center;
     }
     .banner.show { display: block; }
+    .banner{position:fixed!important;z-index:1400!important;top:auto!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;box-shadow:0 4px 14px #0008}
+    .banner button{margin-left:10px;background:#08323c;color:#e8c56b;border:0;border-radius:8px;padding:4px 10px;font:600 12px system-ui,sans-serif}
+    body.gfl-adding .leaflet-marker-pane, body.gfl-adding .leaflet-overlay-pane, body.gfl-adding .leaflet-pane[class*="starkSec"], body.gfl-adding .leaflet-pane[class*="starkPts"], body.gfl-adding .leaflet-pane[class*="parcels"], body.gfl-adding .leaflet-pane[class*="geology"], body.gfl-adding .leaflet-pane[class*="historical"], body.gfl-adding .leaflet-pane[class*="labels"], body.gfl-adding .leaflet-shadow-pane, body.gfl-adding .live-chip, body.gfl-adding .geo-hint, body.gfl-adding .par-note { pointer-events:none!important }
+    body.gfl-adding .leaflet-interactive { pointer-events:none!important }
+    body.gfl-adding #map { cursor: crosshair }
+    #addMenu{z-index:1450!important;max-height:calc(100vh - 120px);overflow:auto}
     .leaflet-popup-content-wrapper { background: #0b3d4d; color: #f4f7f8; border-radius: 12px; }
     .leaflet-popup-tip { background: #0b3d4d; }
     .leaflet-popup-content a { color: #7ed0c8; }
@@ -480,10 +493,34 @@
       marina: "Marina", ramp: "Ramp", park: "Park", swim: "Swim", cove: "Cove",
       mine: "My pin", depth: "Depth", temperature: "Temperature", hazard: "Hazard", pin: "Pin"
     };
+    const EDIT_TYPES = [["cove","Cove name"],["depth","Water depth"],["temperature","Temperature"],["hazard","Hazard"],["pin","Custom pin"]];
     const STORE = "gfl-my-pins-v2";
     const STORE_BAK = "gfl-my-pins-v2-bak";
     const HIDDEN_STORE = "gfl-hidden-pins-v1";
     const MY_MAP_ONLY_KEY = "gfl-my-map-only-v1";
+    const GFL_SWATCHES = ["#ff3b30","#ff9500","#ffd60a","#34c759","#00c7be","#32ade6","#0a84ff","#bf5af2","#ff6bd6","#ffffff"];
+    const GFL_HEX = /^#[0-9a-fA-F]{6}$/;
+    function gflValidColor(c) { if (typeof c !== "string") return ""; c = c.trim(); if (/^#[0-9a-fA-F]{3}$/.test(c)) c = "#" + c[1]+c[1]+c[2]+c[2]+c[3]+c[3]; return GFL_HEX.test(c) ? c.toLowerCase() : ""; }
+    function gflOutline(fill) { const h = gflValidColor(fill); if (!h) return "#08323c"; const r = parseInt(h.substr(1,2),16), g = parseInt(h.substr(3,2),16), b = parseInt(h.substr(5,2),16); return (0.299*r+0.587*g+0.114*b) < 70 ? "#ffffff" : "#08323c"; }
+    function gflSwatchRow(sel, defColor) {
+      const cur = gflValidColor(sel);
+      return '<div class="gfl-sws" data-gfl-sws><span class="gfl-lbl">Pin color</span>' +
+        '<button type="button" class="gfl-sw def' + (cur ? "" : " on") + '" data-color="" title="Default for type">Default for type</button>' +
+        GFL_SWATCHES.map((c) => '<button type="button" class="gfl-sw' + (cur === c ? " on" : "") + '" data-color="' + c + '" style="background:' + c + '" aria-label="Color ' + c + '"></button>').join("") +
+        '<input type="color" aria-label="Any color" data-gfl-custom value="' + (cur || defColor || "#3db8ff") + '"' + (cur && GFL_SWATCHES.indexOf(cur) < 0 ? ' class="on"' : "") + ' /></div>';
+    }
+    // wires a swatch row inside `root`; calls onPick(hex or "")
+    function gflWireSwatches(root, onPick) {
+      const row = root.querySelector("[data-gfl-sws]"); if (!row) return;
+      const mark = (hex) => {
+        row.querySelectorAll("button.gfl-sw").forEach((b) => b.classList.toggle("on", (b.dataset.color || "") === hex));
+        const ci = row.querySelector("[data-gfl-custom]"); ci.classList.toggle("on", !!hex && GFL_SWATCHES.indexOf(hex) < 0);
+        if (hex) ci.value = hex;
+      };
+      row.addEventListener("click", (e) => { const b = e.target.closest("button.gfl-sw"); if (!b) return; const hex = b.dataset.color || ""; mark(hex); onPick(hex); });
+      row.querySelector("[data-gfl-custom]").addEventListener("input", (e) => { const hex = gflValidColor(e.target.value); if (hex) { mark(hex); onPick(hex); } });
+    }
+    window.gflSwatchRow = gflSwatchRow; window.gflWireSwatches = gflWireSwatches; window.gflValidColor = gflValidColor;
     function sanitizeMinePin(p) {
       if (!p || typeof p !== "object") return null;
       if (typeof p.name !== "string" || !p.name.trim()) return null;
@@ -496,7 +533,8 @@
         lat: Number(p.lat),
         lng: Number(p.lng),
         note: p.note ? String(p.note).slice(0, 280) : "",
-        value: p.value ? String(p.value).slice(0, 40) : ""
+        value: p.value ? String(p.value).slice(0, 40) : "",
+        color: gflValidColor(p.color)
       };
     }
     const loadMine = () => {
@@ -987,7 +1025,7 @@
     }
     function placePopupHtml(p) {
       const bits = [`<strong>${esc(p.name)}</strong>`];
-      bits.push(`<div style="font-size:11px;color:#7ed0c8;margin:2px 0 4px">${esc(TYPE_LABEL[p.type] || p.type)}</div>`);
+      bits.push(`<div style="font-size:11px;color:#7ed0c8;margin:2px 0 4px"><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${pinColor(p)};margin-right:5px;vertical-align:-1px;border:1px solid #fff8"></span>${esc(TYPE_LABEL[p.type] || p.type)}</div>`);
       if (p.note) bits.push(esc(p.note));
       if (p.address) bits.push(`<div style="margin-top:4px"><b>Address</b><br>${esc(p.address)}</div>`);
       if (p.phone) bits.push(`<div style="margin-top:4px"><b>Phone</b> · <a href="tel:${esc(String(p.phone).replace(/\\D/g, ""))}">${esc(p.phone)}</a></div>`);
@@ -996,10 +1034,11 @@
       bits.push(` · <a href="#" data-open-detail="${esc(p.custom ? p.id : p.name)}">Open info</a>`);
       return bits.join("");
     }
+    function pinColor(p) { return (p.custom && gflValidColor(p.color)) || colors[p.type] || colors.cove; }
     function addMarker(p) {
-      const color = colors[p.type] || colors.cove;
+      const color = pinColor(p);
       const m = L.circleMarker([p.lat, p.lng], {
-        radius: p.custom ? 9 : 6, color: "#08323c", weight: 1, fillColor: color, fillOpacity: 0.95
+        radius: p.custom ? 9 : 6, color: gflOutline(color), weight: p.custom ? 2 : 1, fillColor: color, fillOpacity: 0.95
       }).addTo(map);
       m.bindPopup(placePopupHtml(p));
       m.place = p;
@@ -1025,7 +1064,7 @@
         const el = document.createElement("div");
         el.className = "item";
         el.innerHTML = `
-          <div class="dot" style="background:${colors[p.type] || colors.cove}"></div>
+          <div class="dot" style="background:${pinColor(p)}"></div>
           <div>
             <h3>${esc(p.name)}</h3>
             <p>${esc(p.note || p.value || "")}</p>
@@ -1047,8 +1086,10 @@
       detailEl.classList.remove("show");
       detailEl.innerHTML = "";
     }
+    let editColor = "";
     function openDetail(p, editing) {
       closeGeoCard();
+      editColor = gflValidColor(p.color);
       selectedPlace = p;
       detailEditing = !!editing;
       const kind = TYPE_LABEL[p.type] || p.type;
@@ -1056,9 +1097,12 @@
         detailEl.innerHTML = `
           <div class="meta">Edit · ${esc(kind)}</div>
           <h3>${esc(p.name)}</h3>
-          ${(p.type === "depth" || p.type === "temperature") ? `<input id="dValue" value="${esc(p.value || "")}" placeholder="${p.type === "depth" ? "Depth e.g. 42 ft" : "Temp e.g. 78°F"}" />` : ""}
+          <label class="gfl-lbl" style="display:block;font-size:11px;opacity:.8;text-transform:uppercase;letter-spacing:.04em;margin-top:4px">Pin type</label>
+          <select id="dType">${(EDIT_TYPES.some((t) => t[0] === p.type) ? EDIT_TYPES : EDIT_TYPES.concat([[p.type, TYPE_LABEL[p.type] || p.type]])).map((t) => `<option value="${esc(t[0])}"${t[0] === p.type ? " selected" : ""}>${esc(t[1])}</option>`).join("")}</select>
+          <input id="dValue" value="${esc(p.value || "")}" placeholder="${p.type === "temperature" ? "Temp e.g. 78°F" : "Depth e.g. 42 ft"}"${(p.type === "depth" || p.type === "temperature") ? "" : ' style="display:none"'} />
           <input id="dName" value="${esc(p.name)}" placeholder="Name" />
           <input id="dNote" value="${esc(p.note || "")}" placeholder="Optional note" />
+          ${gflSwatchRow(p.color, colors[p.type])}
           <div class="btns">
             <button type="button" id="dSave">Save</button>
             <button type="button" id="dCancelEdit">Cancel</button>
@@ -1066,7 +1110,7 @@
           </div>`;
       } else {
         detailEl.innerHTML = `
-          <div class="meta">${esc(kind)}${p.custom ? " · My pin (editable)" : " · Official map pin"}</div>
+          <div class="meta"><span style="display:inline-block;width:11px;height:11px;border-radius:50%;background:${pinColor(p)};margin-right:6px;vertical-align:-1px;border:1px solid #fff8"></span>${esc(kind)}${p.custom ? " · My pin (editable)" : " · Official map pin"}</div>
           <h3>${esc(p.name)}</h3>
           ${p.note ? `<p>${esc(p.note)}</p>` : ""}
           ${p.value ? `<div class="row"><span>Reading · </span>${esc(p.value)}</div>` : ""}
@@ -1080,6 +1124,7 @@
           }</p>
           <div class="btns">
             <a class="tool" style="text-decoration:none;display:inline-block" href="https://maps.apple.com/?daddr=${p.lat},${p.lng}">Directions</a>
+            <button type="button" id="dShare">Share location</button>
             ${p.custom
               ? `<button type="button" id="dEdit">Edit</button><button type="button" class="danger" id="dDelete">Delete pin</button>`
               : `<button type="button" class="danger" id="dHide">Remove from my map</button>`}
@@ -1087,12 +1132,23 @@
           </div>`;
       }
       detailEl.classList.add("show");
+      if (detailEditing && p.custom) {
+        gflWireSwatches(detailEl, (hex) => { editColor = hex; });
+        const ts = document.getElementById("dType");
+        ts.addEventListener("change", () => {
+          const v = document.getElementById("dValue");
+          v.style.display = (ts.value === "depth" || ts.value === "temperature") ? "" : "none";
+          v.placeholder = ts.value === "temperature" ? "Temp e.g. 78°F" : "Depth e.g. 42 ft";
+          const ci = detailEl.querySelector("[data-gfl-custom]"); if (!editColor && ci) ci.value = colors[ts.value] || "#3db8ff";
+        });
+      }
       setSheet("min");
     }
     detailEl.addEventListener("click", (e) => {
       const t = e.target;
       if (!(t instanceof HTMLElement)) return;
       if (t.id === "dClose") { closeDetail(); return; }
+      if (t.id === "dShare" && selectedPlace) { gflSharePin(selectedPlace); return; }
       if (t.id === "dCancelEdit" && selectedPlace) { openDetail(selectedPlace, false); return; }
       if (t.id === "dEdit" && selectedPlace) { openDetail(selectedPlace, true); return; }
       if (t.id === "dDelete" && selectedPlace?.custom) {
@@ -1118,7 +1174,9 @@
         const note = (document.getElementById("dNote")?.value || "").trim();
         const value = (document.getElementById("dValue")?.value || "").trim();
         if (name.length < 2) { alert("Use a name with at least 2 characters."); return; }
-        mine = mine.map((p) => p.id === selectedPlace.id ? { ...p, name, note: note || p.note, value: value || p.value } : p);
+        const typeSel = document.getElementById("dType");
+        const newType = typeSel && typeSel.value ? typeSel.value : selectedPlace.type;
+        mine = mine.map((p) => p.id === selectedPlace.id ? { ...p, type: newType, color: gflValidColor(editColor), name, note: note || p.note, value: (newType === "depth" || newType === "temperature") ? (value || p.value) : "" } : p);
         saveMine(mine);
         const updated = mine.find((p) => p.id === selectedPlace.id);
         render(currentFilter());
@@ -1185,13 +1243,21 @@
         water: "Tap the map to add a water reading",
         pin: "Tap the map to drop a custom pin"
       };
-      banner.textContent = labels[addKind] || "Tap the map to drop your pin";
+      banner.innerHTML = esc(labels[addKind] || "Tap the map to drop your pin") + '<button type="button" id="addCancel">Cancel</button>';
+      document.body.classList.toggle("gfl-adding", on);
+      if (on) { try { map.closePopup(); } catch (_) {} if (typeof closeDetail === "function") closeDetail(); if (typeof setSheet === "function") setSheet("min"); }
       syncOverlayChrome();
     }
     addBtn.addEventListener("click", () => {
       if (addMode) { setAddMode(false); return; }
+      if (!addMenu.classList.contains("show")) {
+        if (typeof closeDetail === "function" && detailEl.classList.contains("show")) closeDetail();
+        const r = addBtn.getBoundingClientRect();
+        addMenu.style.position = "fixed"; addMenu.style.top = (r.bottom + 6) + "px";
+      }
       addMenu.classList.toggle("show");
     });
+    banner.addEventListener("click", (e) => { if (e.target.id === "addCancel") { e.stopPropagation(); setAddMode(false); } });
     addMenu.addEventListener("click", (e) => {
       const btn = e.target.closest("[data-add]");
       if (!btn) return;
@@ -1210,28 +1276,10 @@
         return;
       }
       if (addMode) {
-        let name = "";
-        let value = "";
-        let note = "";
-        if (addKind === "depth") {
-          value = prompt("Water depth (feet)") || "";
-          if (!value.trim()) { setAddMode(false); return; }
-          name = prompt("Optional label") || value.trim();
-          note = prompt("Optional note") || "";
-        } else if (addKind === "temperature") {
-          value = prompt("Water temperature (°F)") || "";
-          if (!value.trim()) { setAddMode(false); return; }
-          name = prompt("Optional label") || value.trim();
-          note = prompt("Optional note") || "";
-        } else if (addKind === "hazard") {
-          name = prompt("Hazard name (e.g. Stump field)") || "";
-          if (!name.trim()) { setAddMode(false); return; }
-          note = prompt("Optional note") || "";
-        } else {
-          name = prompt(addKind === "cove" ? "Cove name" : "Pin name") || "";
-          if (!name.trim()) { setAddMode(false); return; }
-          note = prompt("Optional note") || "";
-        }
+        const DEF = { cove: "New cove", depth: "Depth reading", temperature: "Temperature reading", hazard: "Hazard", pin: "My pin" };
+        const name = DEF[addKind] || "My pin";
+        const value = "";
+        const note = "";
         const pin = {
           id: String(Date.now()),
           name: name.trim(),
@@ -1246,7 +1294,7 @@
         setAddMode(false);
         document.querySelectorAll(".chip[data-type]").forEach((c) => c.classList.toggle("on", c.dataset.type === "mine"));
         render("mine");
-        openDetail({ ...pin, custom: true });
+        openDetail({ ...pin, custom: true }, true);
         return;
       }
       // ignore map clicks that hit markers (they open detail themselves)
@@ -1255,6 +1303,37 @@
       }
     });
     syncOverlayChrome();
+
+    // ---- Share a pin as a location link (#pin=lat,lng,zoom&n=name) ----
+    function gflPinUrl(p) {
+      const z = Math.max(map.getZoom(), 15);
+      return location.origin + location.pathname + "#pin=" + p.lat.toFixed(5) + "," + p.lng.toFixed(5) + "," + z + "&n=" + encodeURIComponent(p.name || "Pin");
+    }
+    function gflSharePin(p) {
+      const url = gflPinUrl(p);
+      const text = (p.name || "Pin") + " — Greers Ferry Lake (" + p.lat.toFixed(5) + ", " + p.lng.toFixed(5) + ")";
+      if (navigator.share) { navigator.share({ title: p.name || "Greers Ferry Lake pin", text: text, url: url }).catch(() => {}); return; }
+      const done = () => alert("Link copied:\n" + url);
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(url).then(done, () => prompt("Copy this link", url));
+      else prompt("Copy this link", url);
+    }
+    window.gflSharePin = gflSharePin;
+    function gflOpenSharedPin() {
+      const m = /#pin=(-?[\d.]+),(-?[\d.]+)(?:,(\d+))?(?:&n=([^&]*))?/.exec(location.hash);
+      if (!m) return;
+      const lat = +m[1], lng = +m[2], z = +(m[3] || 16);
+      if (!isFinite(lat) || !isFinite(lng)) return;
+      let n = "Shared spot"; try { if (m[4]) n = decodeURIComponent(m[4]); } catch (_) {}
+      map.setView([lat, lng], z);
+      const sp = { name: n, lat: lat, lng: lng };
+      const div = document.createElement("div");
+      div.innerHTML = "<b>" + esc(n) + "</b><br><span style='font-size:11px'>Shared location · " + lat.toFixed(5) + ", " + lng.toFixed(5) + "</span><br>" +
+        "<a href='https://maps.apple.com/?daddr=" + lat + "," + lng + "'>Directions</a> · <a href='#' data-sh='1'>Share</a>";
+      div.querySelector("[data-sh]").addEventListener("click", (e) => { e.preventDefault(); gflSharePin(sp); });
+      L.marker([lat, lng]).addTo(map).bindPopup(div).openPopup();
+    }
+    gflOpenSharedPin();
+    window.addEventListener("hashchange", gflOpenSharedPin);
 
     document.getElementById("locate").addEventListener("click", () => {
       if (!navigator.geolocation) return alert("Location not available.");
@@ -1519,6 +1598,7 @@ document.addEventListener("visibilitychange",function(){if(document.visibilitySt
   <input id="water-depth" type="number" inputmode="decimal" step="0.1" min="0" placeholder="Depth (ft)" />
   <input id="water-temp" type="number" inputmode="decimal" step="0.1" placeholder="Water temp (°F)" />
   <textarea id="wr-fact" placeholder="Note (optional)"></textarea>
+  <div id="wr-sw-host"></div>
   <div class="acts">
     <button type="button" id="wr-delete" class="danger grow" hidden>Delete</button>
     <button type="button" id="wr-cancel">Cancel</button>
@@ -1535,11 +1615,12 @@ let waterPins = [], editing = null, moving = null;
 const group = L.layerGroup().addTo(map);
 const form = document.getElementById("wr-form");
 const banner = document.getElementById("banner");
-function loadWater(){ try { const v = JSON.parse(localStorage.getItem(STORE_WATER)||"[]"); return Array.isArray(v) ? v.filter(function(p){ return p && !isNaN(+p.lat) && !isNaN(+p.lng); }) : []; } catch(e){ return []; } }
+const WATER_DEF = "#2fa8e0"; let wrColor = "";
+function loadWater(){ try { const v = JSON.parse(localStorage.getItem(STORE_WATER)||"[]"); return Array.isArray(v) ? v.filter(function(p){ return p && !isNaN(+p.lat) && !isNaN(+p.lng); }).map(function(p){ p.color = window.gflValidColor(p.color); return p; }) : []; } catch(e){ return []; } }
 function persistWater(){ localStorage.setItem(STORE_WATER, JSON.stringify(waterPins)); render(); }
 function saveWaterPin(pin){
   const id = pin.id || ("w-"+Date.now());
-  const payload = {id:id, name:pin.name, lat:pin.lat, lng:pin.lng, fact:pin.fact||"", depthFt:pin.depthFt==null||pin.depthFt===""?null:Number(pin.depthFt), tempF:pin.tempF==null||pin.tempF===""?null:Number(pin.tempF), updatedAt: Date.now()};
+  const payload = {id:id, name:pin.name, lat:pin.lat, lng:pin.lng, fact:pin.fact||"", depthFt:pin.depthFt==null||pin.depthFt===""?null:Number(pin.depthFt), tempF:pin.tempF==null||pin.tempF===""?null:Number(pin.tempF), color: window.gflValidColor(pin.color), updatedAt: Date.now()};
   waterPins = waterPins.filter(function(p){ return p.id !== id; }).concat([payload]);
   try { persistWater(); } catch(e){ return Promise.reject(e); }
   return Promise.resolve(id);
@@ -1563,7 +1644,7 @@ function popupHtml(p){
 function render(){
   group.clearLayers();
   waterPins.forEach(function(p){
-    const m = L.circleMarker([p.lat,p.lng], {radius:8, color:"#ffffff", weight:2, fillColor:"#2fa8e0", fillOpacity:0.95}).addTo(group);
+    const m = L.circleMarker([p.lat,p.lng], {radius:8, color:"#ffffff", weight:2, fillColor:(p.color||WATER_DEF), fillOpacity:0.95}).addTo(group);
     m.bindPopup(popupHtml(p));
     m.on("popupopen", function(){
       const root = m.getPopup().getElement();
@@ -1585,6 +1666,10 @@ function openForm(p){
   document.getElementById("water-temp").value = (p.tempF!=null && p.tempF!=="") ? p.tempF : "";
   document.getElementById("wr-fact").value = p.fact || "";
   document.getElementById("wr-delete").hidden = !p.id;
+  wrColor = window.gflValidColor(p.color);
+  const host = document.getElementById("wr-sw-host");
+  host.innerHTML = window.gflSwatchRow(wrColor, WATER_DEF);
+  window.gflWireSwatches(host, function(hex){ wrColor = hex; });
   form.classList.add("open");
 }
 function closeForm(){ form.classList.remove("open"); editing = null; }
@@ -1597,14 +1682,14 @@ document.getElementById("wr-save").onclick = function(){
   if (depthFt==="" && tempF==="") { alert("Add a depth and/or water temperature"); return; }
   let name = document.getElementById("wr-name").value.trim();
   if (!name) name = ([depthFt?depthFt+" ft":"", tempF?tempF+" °F":""].filter(Boolean).join(" · ") || "Water reading");
-  saveWaterPin({id:editing.id||null, name:name, depthFt:depthFt, tempF:tempF, lat:editing.lat, lng:editing.lng, fact:document.getElementById("wr-fact").value.trim()})
+  saveWaterPin({id:editing.id||null, name:name, depthFt:depthFt, tempF:tempF, lat:editing.lat, lng:editing.lng, color:wrColor, fact:document.getElementById("wr-fact").value.trim()})
     .then(function(){ closeForm(); }).catch(function(err){ alert("Could not save water reading"); console.warn(err); });
 };
 window.gflWaterAdd = function(ll){ openForm({id:null, lat:ll.lat, lng:ll.lng}); };
 window.gflWaterClick = function(ev){
   if (!moving) return false;
   const p = moving; moving = null; banner.classList.remove("show");
-  saveWaterPin({id:p.id, name:p.name, depthFt:p.depthFt, tempF:p.tempF, lat:ev.latlng.lat, lng:ev.latlng.lng, fact:p.fact||""}).catch(function(err){ alert("Could not move water reading"); console.warn(err); });
+  saveWaterPin({id:p.id, name:p.name, depthFt:p.depthFt, tempF:p.tempF, lat:ev.latlng.lat, lng:ev.latlng.lng, color:p.color, fact:p.fact||""}).catch(function(err){ alert("Could not move water reading"); console.warn(err); });
   return true;
 };
 waterPins = loadWater();
