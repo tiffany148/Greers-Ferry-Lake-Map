@@ -152,7 +152,7 @@
     .banner.show { display: block; }
     .banner{position:fixed!important;z-index:1400!important;top:auto!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;box-shadow:0 4px 14px #0008}
     .banner button{margin-left:10px;background:#08323c;color:#e8c56b;border:0;border-radius:8px;padding:4px 10px;font:600 12px system-ui,sans-serif}
-    body.gfl-adding .leaflet-marker-pane, body.gfl-adding .leaflet-overlay-pane, body.gfl-adding .leaflet-pane[class*="starkSec"], body.gfl-adding .leaflet-pane[class*="starkPts"], body.gfl-adding .leaflet-pane[class*="parcels"], body.gfl-adding .leaflet-pane[class*="geology"], body.gfl-adding .leaflet-pane[class*="historical"], body.gfl-adding .leaflet-pane[class*="labels"], body.gfl-adding .leaflet-shadow-pane, body.gfl-adding .live-chip, body.gfl-adding .geo-hint, body.gfl-adding .par-note { pointer-events:none!important }
+    body.gfl-adding .leaflet-marker-pane, body.gfl-adding .leaflet-overlay-pane, body.gfl-adding .leaflet-pane[class*="starkSec"], body.gfl-adding .leaflet-pane[class*="starkPts"], body.gfl-adding .leaflet-pane[class*="parcels"], body.gfl-adding .leaflet-pane[class*="geology"], body.gfl-adding .leaflet-pane[class*="historical"], body.gfl-adding .leaflet-pane[class*="preLake"], body.gfl-adding .pre-note, body.gfl-adding .leaflet-pane[class*="labels"], body.gfl-adding .leaflet-shadow-pane, body.gfl-adding .live-chip, body.gfl-adding .geo-hint, body.gfl-adding .par-note { pointer-events:none!important }
     body.gfl-adding .leaflet-interactive { pointer-events:none!important }
     body.gfl-adding #map { cursor: crosshair }
     #addMenu{z-index:1450!important;max-height:calc(100vh - 120px);overflow:auto}
@@ -164,6 +164,10 @@
   .gfl-3d{position:fixed;right:12px;top:158px;z-index:1200;width:30px;height:30px;border-radius:4px;background:#fff;color:#0b3d4d;font:700 12px/30px system-ui,sans-serif;text-align:center;text-decoration:none;box-shadow:0 1px 5px rgba(0,0,0,.65)}
   .par-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(86px + env(safe-area-inset-bottom));z-index:1200;background:#0e2a3aee;color:#fff;border:1px solid #1e4a5f;border-radius:999px;padding:6px 12px;font-size:12px;display:none;pointer-events:none;white-space:nowrap}
   .par-note.show{display:block}
+  /* Before the lake (final10) */
+  .pre-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(118px + env(safe-area-inset-bottom));z-index:1200;background:#3b2a12ee;color:#fff4dc;border:1px solid #8a6a2f;border-radius:12px;padding:6px 12px;font-size:12px;line-height:1.3;display:none;pointer-events:none;text-align:center;max-width:92vw}
+  .pre-note.show{display:block}
+  body.gfl-adding .pre-note{display:none!important}
   .gfl-north svg{transition:transform .15s}
 
   .srch{position:relative;margin-top:8px}
@@ -264,6 +268,12 @@
         <input type="range" id="histOpacity" min="0.15" max="1" step="0.02" value="0.78" aria-label="Before the dam opacity" />
         <span class="pct" id="histPct">78</span>
       </label>
+      <button class="tool" data-overlay="prelake" aria-pressed="false" title="USGS 1:250,000 map dated 1956 — the Little Red River valley before Greers Ferry Dam">Before the lake · 1956</button>
+      <label class="fade-wrap" id="preFade">
+        Opacity
+        <input type="range" id="preOpacity" min="0.15" max="1" step="0.02" value="0.95" aria-label="Before the lake opacity" />
+        <span class="pct" id="prePct">95</span>
+      </label>
       <button class="tool" data-overlay="geo" aria-pressed="false">Geology</button>
       <label class="fade-wrap" id="geoFade">
         Opacity
@@ -281,6 +291,7 @@
     </div>
   </header>
   <a class="gfl-3d" id="btn3d" href="3d.html" title="View in 3D" aria-label="View in 3D">3D</a>
+  <div class="pre-note" id="preNote">Before the lake · USGS 1:250,000 map dated 1956 — the river valley before Greers Ferry Dam</div>
   <div class="par-note" id="parNote">Zoom in closer to see parcels · Not a legal boundary</div>
   <div class="geo-loading" id="geoLoading" role="status" aria-live="polite"><span class="spin" aria-hidden="true"></span><span>Loading geology…</span></div>
   <div class="geo-hint" id="geoHint">Geology on — tap the map for rock type &amp; age</div>
@@ -318,7 +329,7 @@
         Official map pins can be <b>removed from your map</b> (hidden on this phone only — restore via the quiet Restore hidden control above when needed).
         <b>Streets</b> is the default lake map (green land / blue water). Satellite and Topo are alternatives. <b>Before the dam</b> and <b>Geology</b> are optional stack overlays — each has its own opacity slider.
         <b>County lines</b> (U.S. Census Bureau TIGERweb) draw county borders with names over any basemap; <b>My location</b> / the target button shows you and can follow you (iPhone only tracks while the screen is on and the page is open). With Geology on, tap the map for unit name, age, and material (USGS National Geologic Map).
-        Before the dam uses the USGS historic topographic maps (via Esri) — Stark prints in red on the map itself. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
+        <b>Before the lake · 1956</b> is a second, separate overlay: the USGS 1:250,000 topographic map dated 1956 (Russellville and Memphis sheets), made before Greers Ferry Dam was started in 1959, so the Little Red River, Stark, Higden, Shiloh, Miller and old Heber Springs show as they were. It has its own opacity slider. Before the dam uses the USGS historic topographic maps (via Esri) — Stark prints in red on the map itself. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
   </section>
@@ -1972,6 +1983,62 @@ render();
   if (window.ResizeObserver) new ResizeObserver(layoutLoc).observe(document.querySelector("header"));
   ui();
   window.gflLoc = { state: function () { return state; }, stop: stop };
+})();
+</script>
+<script>
+/* ===== Before the lake: USGS 1:250,000 topographic map dated 1956 (final10) =====
+   Source: USGS Historical Topographic Map Collection (topoView), served by Esri's USGS_Historical_Topographic_Maps ImageServer.
+   Filter: Map_Scale = 250000 AND Imprint_Year = 1956 (Russellville + Memphis sheets). Separate from the "Before the dam" layer. */
+(function () {
+  "use strict";
+  var rp = map.getPane("rotatePane") || map.getPane("mapPane");
+  map.createPane("preLake", rp);
+  var pane = map.getPane("preLake"); pane.style.zIndex = 355; pane.style.pointerEvents = "none";
+  var SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer/exportImage";
+  var HALF = 20037508.342789244;
+  var RULE = encodeURIComponent(JSON.stringify({ mosaicMethod: "esriMosaicAttribute", mosaicOperation: "MT_FIRST",
+    where: "Map_Scale = 250000 AND Imprint_Year = 1956", sortField: "Imprint_Year", sortValue: "1956", ascending: false }));
+  var ATTR = 'Before the lake: <a href="https://www.usgs.gov/programs/national-geospatial-program/topographic-maps" target="_blank" rel="noopener">USGS Historical Topographic Maps</a> 1956 (via Esri)';
+  var layer = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", {
+    pane: "preLake", minZoom: 8, maxZoom: 18, maxNativeZoom: 13, opacity: 1,
+    detectRetina: false, updateWhenIdle: true, keepBuffer: 2, attribution: ATTR
+  });
+  layer.getTileUrl = function (c) {
+    var size = (2 * HALF) / Math.pow(2, c.z), xmin = -HALF + c.x * size, ymax = HALF - c.y * size;
+    return SERVER + "?bbox=" + xmin + "," + (ymax - size) + "," + (xmin + size) + "," + ymax
+      + "&bboxSR=3857&imageSR=3857&size=256,256&format=jpgpng&transparent=true&interpolation=RSP_BilinearInterpolation"
+      + "&mosaicRule=" + RULE + "&f=image";
+  };
+  var on = false, okTiles = 0, badTiles = 0, warned = false;
+  layer.on("tileload", function () { okTiles++; });
+  layer.on("tileerror", function () {
+    badTiles++;
+    if (!warned && okTiles === 0 && badTiles >= 4) { warned = true; toastMsg("The 1956 map didn’t load (USGS/Esri map service isn’t answering). Check your connection and toggle the layer to retry.", 6000); }
+  });
+  var toastEl = document.getElementById("gflToast"), toastT;
+  function toastMsg(html, ms) { toastEl.innerHTML = html; toastEl.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(function () { toastEl.classList.remove("show"); }, ms || 5000); }
+  var op = document.getElementById("preOpacity"), pct = document.getElementById("prePct"), fade = document.getElementById("preFade"), note = document.getElementById("preNote");
+  function sync() {
+    pane.style.opacity = String(op.value); pct.textContent = String(Math.round(Number(op.value) * 100));
+    fade.classList.toggle("show", on); note.classList.toggle("show", on);
+  }
+  function set(v) {
+    on = v;
+    var b = document.querySelector('[data-overlay="prelake"]');
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false");
+    if (on) {
+      okTiles = 0; badTiles = 0; warned = false; sync(); layer.addTo(map);
+      toastMsg('Before the lake: <a href="https://ngmdb.usgs.gov/topoview/" target="_blank" rel="noopener">USGS Historical Topographic Map Collection</a> — 1:250,000 map dated 1956 (Russellville &amp; Memphis sheets). Made before the dam was started in 1959.', 6500);
+    } else { map.removeLayer(layer); sync(); }
+  }
+  document.getElementById("overlays").addEventListener("click", function (e) {
+    if (e.target.closest("input, label.fade-wrap")) return;
+    var b = e.target.closest('[data-overlay="prelake"]'); if (!b) return;
+    set(!on);
+  });
+  op.addEventListener("input", sync);
+  sync();
+  window.gflPreLake = { set: set, isOn: function () { return on; }, layer: layer };
 })();
 </script>
 </body>
