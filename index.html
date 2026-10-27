@@ -201,6 +201,24 @@
 .stark-ico{background:#f3e3c3;border:2px solid #6b4423;border-radius:50%;color:#5a3a1a;font:bold 13px Georgia,serif;display:flex;align-items:center;justify-content:center;box-shadow:0 1px 4px rgba(60,35,10,.5)}
 .stark-pop{font:13px/1.4 Georgia,serif;color:#f3e7d0;max-width:250px}.stark-pop a{color:#f0c987}.stark-pop h4{color:#f6d9a0}.stark-pop h4{margin:0 0 4px;font-size:14px}.stark-pop .cf{display:inline-block;background:#efe0bf;border-radius:4px;padding:0 5px;font-size:12px;margin:2px 0;color:#4a3015}.stark-pop small{color:#d9c7a8}
 .stark-sec-lbl{background:none;border:none;box-shadow:none;color:#6b4423;font:bold 11px Georgia,serif;text-shadow:0 0 3px #fff}
+
+  /* county lines + locate/follow (final9) */
+  body.gfl-adding .leaflet-pane[class*="countyLines"], body.gfl-adding .leaflet-pane[class*="countyLbl"], body.gfl-adding .leaflet-pane[class*="leaflet-loc-pane"], body.gfl-adding .gfl-loc, body.gfl-adding .gfl-loc-pill { pointer-events:none!important }
+  .cty-lbl{background:none;border:0;white-space:nowrap;text-align:center;color:#7a0a4a;font:700 11px/1 system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;text-shadow:-1px -1px 0 #fff,1px -1px 0 #fff,-1px 1px 0 #fff,1px 1px 0 #fff,0 0 4px #fff,0 0 6px #fff;pointer-events:none}
+  .gfl-loc{position:fixed;right:12px;top:198px;z-index:1200;width:30px;height:30px;border-radius:4px;background:#fff;color:#0b3d4d;border:0;padding:0;box-shadow:0 1px 5px rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center}
+  .gfl-loc svg{width:20px;height:20px}
+  .gfl-loc[data-s="show"]{color:#1a73e8}
+  .gfl-loc[data-s="follow"]{background:#1a73e8;color:#fff}
+  .gfl-loc[data-s="paused"]{background:#e8c56b;color:#08323c}
+  .gfl-loc-pill{position:fixed;right:50px;top:198px;z-index:1200;max-width:calc(100% - 140px);display:none;align-items:center;gap:6px;background:#0e2a3aee;color:#f4f7f8;border:1px solid #1e4a5f;border-radius:999px;padding:4px 6px 4px 10px;font:12px/1.3 system-ui,sans-serif;box-shadow:0 4px 14px #0007}
+  .gfl-loc-pill.show{display:flex}
+  .gfl-loc-pill button{border:1px solid #1f6276;background:#124d60;color:#f4f7f8;border-radius:999px;padding:3px 9px;font:600 12px system-ui,sans-serif}
+  .gfl-loc-pill button.stop{background:#7a2330}
+  .gfl-toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(150px + env(safe-area-inset-bottom));z-index:1500;max-width:min(340px,calc(100% - 32px));background:#0b3d4dee;color:#f4f7f8;border:1px solid #1f6276;border-radius:12px;padding:8px 12px;font:13px/1.4 system-ui,sans-serif;box-shadow:0 6px 18px #0009;display:none;text-align:center;pointer-events:none}
+  .gfl-toast.show{display:block}
+  .gfl-toast a{color:#7bdff2;pointer-events:auto}
+  .gfl-me-ico{background:none;border:0}
+  .gfl-me-ico .arr{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:16px solid #1a73e8;margin:0 auto;transform-origin:50% 100%;filter:drop-shadow(0 0 2px #fff)}
 </style>
 </head>
 <body>
@@ -259,6 +277,7 @@
         <span class="pct" id="parPct">90</span>
       </label>
       <button class="tool" data-overlay="stark" aria-pressed="false">Stark history</button>
+      <button class="tool" data-overlay="county" aria-pressed="false">County lines</button>
     </div>
   </header>
   <a class="gfl-3d" id="btn3d" href="3d.html" title="View in 3D" aria-label="View in 3D">3D</a>
@@ -298,7 +317,7 @@
         Use <b>Export / Import my pins</b> to move pins to another phone. Cross-device sign-in sync is not on this Pages build.
         Official map pins can be <b>removed from your map</b> (hidden on this phone only — restore via the quiet Restore hidden control above when needed).
         <b>Streets</b> is the default lake map (green land / blue water). Satellite and Topo are alternatives. <b>Before the dam</b> and <b>Geology</b> are optional stack overlays — each has its own opacity slider.
-        With Geology on, tap the map for unit name, age, and material (USGS National Geologic Map).
+        <b>County lines</b> (U.S. Census Bureau TIGERweb) draw county borders with names over any basemap; <b>My location</b> / the target button shows you and can follow you (iPhone only tracks while the screen is on and the page is open). With Geology on, tap the map for unit name, age, and material (USGS National Geologic Map).
         Before the dam uses the USGS historic topographic maps (via Esri) — Stark prints in red on the map itself. Day-use fees often apply at Corps parks. Pets are not allowed in day-use swim areas.
       </p>
     </div>
@@ -1335,17 +1354,7 @@
     gflOpenSharedPin();
     window.addEventListener("hashchange", gflOpenSharedPin);
 
-    document.getElementById("locate").addEventListener("click", () => {
-      if (!navigator.geolocation) return alert("Location not available.");
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          L.circleMarker([pos.coords.latitude, pos.coords.longitude], { radius: 8, fillColor: "#fff", color: "#e8c56b", weight: 2, fillOpacity: 1 }).addTo(map)
-            .bindPopup("You are here").openPopup();
-          map.setView([pos.coords.latitude, pos.coords.longitude], 13);
-        },
-        () => alert("Turn on Location for Safari.")
-      );
-    });
+    /* "My location" now handled by the locate/follow module near the end of this file. */
 
     const sheet = document.getElementById("sheet");
     const toggle = document.getElementById("toggleSheet");
@@ -1697,5 +1706,273 @@ render();
 })();
 </script>
 
+<div id="gflToast" class="gfl-toast" role="status" aria-live="polite"></div>
+<script>
+/* ===== County lines (U.S. Census Bureau TIGERweb, live) + Locate / Follow me (final9) ===== */
+(function () {
+  "use strict";
+  var toastEl = document.getElementById("gflToast"), toastT;
+  function toast(html, ms) {
+    toastEl.innerHTML = html; toastEl.classList.add("show");
+    clearTimeout(toastT); toastT = setTimeout(function () { toastEl.classList.remove("show"); }, ms || 5000);
+  }
+
+  /* ---------- County lines ---------- */
+  var rp = map.getPane("rotatePane") || map.getPane("mapPane");
+  map.createPane("countyLines", rp); map.getPane("countyLines").style.zIndex = 440;
+  map.createPane("countyLbl", rp);   map.getPane("countyLbl").style.zIndex = 447;
+  map.getPane("countyLines").style.pointerEvents = "none";
+  map.getPane("countyLbl").style.pointerEvents = "none";
+  var TIGER = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query";
+  var ATLAS = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Counties_Generalized_Boundaries/FeatureServer/0/query";
+  var ABBR = {"01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY"};
+  var MINZ = 8;
+  var ctyOn = false, ctyFeats = [], ctyBounds = null, ctyZoom = null, ctyReq = 0, ctyTimer = null, ctySrc = "";
+  var halo = L.geoJSON(null, { pane: "countyLines", interactive: false, renderer: L.svg({ pane: "countyLines", padding: 0.5 }), style: { color: "#ffffff", weight: 6.5, opacity: 0.9, fill: false, lineJoin: "round" } });
+  var line = L.geoJSON(null, { pane: "countyLines", interactive: false, renderer: L.svg({ pane: "countyLines", padding: 0.5 }), style: { color: "#c2185b", weight: 2.6, opacity: 1, fill: false, dashArray: "9 5", lineJoin: "round" } });
+  var lbls = L.layerGroup();
+  var ATTR = 'Counties: <a href="https://tigerweb.geo.census.gov/" target="_blank" rel="noopener">U.S. Census Bureau TIGERweb</a>';
+
+  function norm(f) {
+    var p = f.properties || {};
+    var name = p.BASENAME || (p.NAME || "").replace(/ (County|Parish)$/, "");
+    var fips = p.STATE || p.STATE_FIPS || "";
+    var st = ABBR[fips] || (p.STATE_NAME || "");
+    return { name: name, full: p.NAME || name + " County", st: st, id: p.GEOID || p.FIPS || p.NAME, geometry: f.geometry };
+  }
+  function getJSON(url) {
+    return fetch(url).then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); }).then(function (j) { if (j.error) throw new Error(j.error.message || "service error"); return j; });
+  }
+  function fetchCounties(b, z) {
+    var off = (360 / (256 * Math.pow(2, z))) * 1.2;
+    var env = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map(function (n) { return n.toFixed(5); }).join(",");
+    var q = "?where=1%3D1&geometry=" + env + "&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&outSR=4326&geometryPrecision=5&maxAllowableOffset=" + off.toFixed(6) + "&f=geojson&outFields=";
+    return getJSON(TIGER + q + "NAME,BASENAME,STATE,GEOID").then(function (j) { ctySrc = "tiger"; return j; })
+      .catch(function () {
+        return getJSON(ATLAS + q + "NAME,STATE_NAME,STATE_FIPS,FIPS").then(function (j) { ctySrc = "atlas"; return j; });
+      });
+  }
+  function inRing(pt, ring) {
+    var x = pt[0], y = pt[1], c = false;
+    for (var i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      var xi = ring[i][0], yi = ring[i][1], xj = ring[j][0], yj = ring[j][1];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c;
+    }
+    return c;
+  }
+  function inGeom(pt, g) {
+    var polys = g.type === "MultiPolygon" ? g.coordinates : [g.coordinates];
+    for (var k = 0; k < polys.length; k++) {
+      if (!inRing(pt, polys[k][0])) continue;
+      var hole = false;
+      for (var h = 1; h < polys[k].length; h++) if (inRing(pt, polys[k][h])) { hole = true; break; }
+      if (!hole) return true;
+    }
+    return false;
+  }
+  function gBounds(g) {
+    var polys = g.type === "MultiPolygon" ? g.coordinates : [g.coordinates], w = 180, e = -180, s = 90, n = -90;
+    polys.forEach(function (p) { p[0].forEach(function (c) { if (c[0] < w) w = c[0]; if (c[0] > e) e = c[0]; if (c[1] < s) s = c[1]; if (c[1] > n) n = c[1]; }); });
+    return L.latLngBounds([s, w], [n, e]);
+  }
+  /* label position: point inside the county, nearest the middle of the part that is on screen */
+  function labelSpot(f, view) {
+    var gb = f.gb, w = Math.max(gb.getWest(), view.getWest()), e = Math.min(gb.getEast(), view.getEast()),
+        s = Math.max(gb.getSouth(), view.getSouth()), n = Math.min(gb.getNorth(), view.getNorth());
+    if (w >= e || s >= n) return null;
+    var cx = (w + e) / 2, cy = (s + n) / 2, best = null, bd = 1e9, N = 14;
+    for (var i = 0; i <= N; i++) for (var j = 0; j <= N; j++) {
+      var x = w + (e - w) * i / N, y = s + (n - s) * j / N;
+      if (!inGeom([x, y], f.geometry)) continue;
+      var d = Math.pow((x - cx) / (e - w + 1e-9), 2) + Math.pow((y - cy) / (n - s + 1e-9), 2);
+      if (d < bd) { bd = d; best = [y, x]; }
+    }
+    return best;
+  }
+  function drawLabels() {
+    lbls.clearLayers();
+    if (!ctyOn) return;
+    var view = map.getBounds();
+    ctyFeats.forEach(function (f) {
+      var sp = labelSpot(f, view); if (!sp) return;
+      var txt = f.name + (map.getZoom() >= 10 ? " Co." : "") + (map.getZoom() >= 11 && f.st ? ", " + f.st : "");
+      L.marker(sp, { pane: "countyLbl", interactive: false, keyboard: false, icon: L.divIcon({ className: "cty-lbl", html: txt.replace(/&/g, "&amp;").replace(/</g, "&lt;"), iconSize: [0, 0] }) }).addTo(lbls);
+    });
+  }
+  function loadCounties() {
+    if (!ctyOn) return;
+    if (map.getZoom() < MINZ) { halo.clearLayers(); line.clearLayers(); lbls.clearLayers(); ctyFeats = []; ctyBounds = null; toast("Zoom in a little more to see county lines.", 3000); return; }
+    var view = map.getBounds();
+    if (ctyBounds && ctyBounds.contains(view) && ctyZoom === map.getZoom()) { drawLabels(); return; }
+    var req = ++ctyReq, pad = view.pad(0.25), z = map.getZoom();
+    fetchCounties(pad, z).then(function (j) {
+      if (req !== ctyReq || !ctyOn) return;
+      ctyFeats = (j.features || []).filter(function (f) { return f.geometry; }).map(norm);
+      ctyFeats.forEach(function (f) { f.gb = gBounds(f.geometry); });
+      ctyBounds = pad; ctyZoom = z;
+      var gj = ctyFeats.map(function (f) { return { type: "Feature", properties: {}, geometry: f.geometry }; });
+      halo.clearLayers(); line.clearLayers(); halo.addData(gj); line.addData(gj);
+      drawLabels();
+    }).catch(function () {
+      if (req !== ctyReq) return;
+      toast("Couldn’t load county lines (Census service didn’t answer). Check your connection and move the map to retry.", 5000);
+    });
+  }
+  function schedule() { clearTimeout(ctyTimer); ctyTimer = setTimeout(loadCounties, 300); }
+  function setCounty(on) {
+    ctyOn = on;
+    var btn = document.querySelector('[data-overlay="county"]');
+    btn.classList.toggle("on", on); btn.setAttribute("aria-pressed", on ? "true" : "false");
+    if (on) {
+      halo.addTo(map); line.addTo(map); lbls.addTo(map);
+      map.attributionControl && map.attributionControl.addAttribution(ATTR);
+      toast('County lines: <a href="https://tigerweb.geo.census.gov/" target="_blank" rel="noopener">U.S. Census Bureau TIGERweb</a> (current boundaries).', 6000);
+      loadCounties();
+    } else {
+      ctyReq++; map.removeLayer(halo); map.removeLayer(line); map.removeLayer(lbls);
+      map.attributionControl && map.attributionControl.removeAttribution(ATTR);
+      ctyBounds = null; ctyFeats = [];
+    }
+  }
+  document.getElementById("overlays").addEventListener("click", function (e) {
+    var b = e.target.closest('[data-overlay="county"]'); if (!b) return;
+    setCounty(!ctyOn);
+  });
+  map.on("moveend zoomend", function () { if (ctyOn) schedule(); });
+  window.gflCounty = { set: setCounty, isOn: function () { return ctyOn; } };
+
+  /* ---------- Locate / Follow me ---------- */
+  /* states: off -> show (dot + accuracy, centered once) -> follow (recenters) -> paused (user dragged) -> off (Stop) */
+  map.createPane("locPane", rp); map.getPane("locPane").style.zIndex = 650;
+  var state = "off", watchId = null, last = null, dot = null, acc = null, arrow = null, wake = null;
+  var locBtn = document.createElement("button");
+  locBtn.type = "button"; locBtn.className = "gfl-loc"; locBtn.id = "gflLoc"; locBtn.dataset.s = "off";
+  locBtn.setAttribute("aria-label", "Show my location");
+  locBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4" fill="currentColor"/><circle cx="12" cy="12" r="8"/><path d="M12 1v3M12 20v3M1 12h3M20 12h3"/></svg>';
+  var pill = document.createElement("div"); pill.className = "gfl-loc-pill"; pill.id = "gflLocPill";
+  pill.innerHTML = '<span id="gflLocTxt"></span><button type="button" id="gflLocAct"></button><button type="button" class="stop" id="gflLocStop" aria-label="Stop location">Stop</button>';
+  document.body.appendChild(locBtn); document.body.appendChild(pill);
+  L.DomEvent.disableClickPropagation(locBtn); L.DomEvent.disableClickPropagation(pill);
+  var txt = document.getElementById("gflLocTxt"), act = document.getElementById("gflLocAct");
+
+  function ui() {
+    locBtn.dataset.s = state;
+    locBtn.setAttribute("aria-label", { off: "Show my location", show: "Follow me", follow: "Following you", paused: "Resume following" }[state]);
+    pill.classList.toggle("show", state !== "off");
+    var a = last && last.coords.accuracy ? " · ±" + Math.round(last.coords.accuracy * 3.281) + " ft" : "";
+    if (state === "show") { txt.textContent = (last ? "You are here" + a : "Finding you…"); act.textContent = "Follow"; act.style.display = ""; }
+    if (state === "follow") { txt.textContent = (last ? "Following you" + a : "Finding you…"); act.textContent = "Pause"; act.style.display = ""; }
+    if (state === "paused") { txt.textContent = "Follow paused"; act.textContent = "Resume"; act.style.display = ""; }
+    var hb = document.getElementById("locate"); if (hb) hb.classList.toggle("on", state !== "off");
+  }
+  function msg(err) {
+    if (!err) return;
+    if (err.code === 1) return "Location is blocked. On iPhone: Settings → Privacy & Security → Location Services → Safari Websites → While Using, then reload. (Home Screen app: allow it there.)";
+    if (err.code === 2) return "Couldn’t get a GPS fix right now. Try going outside or toggling Location Services.";
+    if (err.code === 3) return "Still looking for your location… this can take a moment indoors.";
+    return "Location isn’t available.";
+  }
+  function setMe(pos) {
+    last = pos;
+    var ll = [pos.coords.latitude, pos.coords.longitude], r = pos.coords.accuracy || 30;
+    if (!acc) {
+      acc = L.circle(ll, { pane: "locPane", radius: r, color: "#1a73e8", weight: 1, opacity: 0.6, fillColor: "#1a73e8", fillOpacity: 0.14, interactive: false }).addTo(map);
+      dot = L.circleMarker(ll, { pane: "locPane", radius: 8, color: "#ffffff", weight: 3, fillColor: "#1a73e8", fillOpacity: 1, interactive: true, bubblingMouseEvents: false }).addTo(map);
+      dot.on("click", function () {
+        if (!last) return;
+        var p = { name: "My location", lat: last.coords.latitude, lng: last.coords.longitude };
+        var d = document.createElement("div");
+        d.innerHTML = "<b>You are here</b><br><span style='font-size:11px'>" + p.lat.toFixed(5) + ", " + p.lng.toFixed(5) + (last.coords.accuracy ? " · ±" + Math.round(last.coords.accuracy * 3.281) + " ft" : "") + "</span><br><a href='#' data-sh='1'>Share my location</a>";
+        d.querySelector("[data-sh]").addEventListener("click", function (e) { e.preventDefault(); if (window.gflSharePin) window.gflSharePin(p); });
+        dot.bindPopup(d).openPopup();
+      });
+    } else { acc.setLatLng(ll); acc.setRadius(r); dot.setLatLng(ll); }
+    var h = pos.coords.heading, sp = pos.coords.speed;
+    if (h != null && !isNaN(h) && sp != null && sp > 0.7) {
+      if (!arrow) arrow = L.marker(ll, { pane: "locPane", interactive: false, keyboard: false, icon: L.divIcon({ className: "gfl-me-ico", html: '<div class="arr"></div>', iconSize: [14, 30], iconAnchor: [7, 30] }) }).addTo(map);
+      arrow.setLatLng(ll);
+      var el = arrow.getElement && arrow.getElement(); if (el) { var a2 = el.querySelector(".arr"); if (a2) a2.style.transform = "rotate(" + h + "deg)"; }
+    } else if (arrow) { map.removeLayer(arrow); arrow = null; }
+  }
+  var firstFix = true;
+  function onFix(pos) {
+    var wasFirst = firstFix; firstFix = false;
+    setMe(pos);
+    var ll = [pos.coords.latitude, pos.coords.longitude];
+    if (state === "follow" || (state === "show" && wasFirst)) {
+      programmatic = true;
+      if (wasFirst) map.setView(ll, Math.max(map.getZoom(), 15), { animate: true }); else map.panTo(ll, { animate: true });
+      setTimeout(function () { programmatic = false; }, 700);
+    }
+    ui();
+  }
+  var programmatic = false, lastErrAt = 0;
+  function onErr(err) {
+    if (err && err.code === 1) { stop(true); toast(msg(err), 9000); return; }
+    var now = Date.now(); if (now - lastErrAt < 15000) return; lastErrAt = now;
+    toast(msg(err), 5000);
+  }
+  function startWatch() {
+    if (watchId != null) return;
+    watchId = navigator.geolocation.watchPosition(onFix, onErr, { enableHighAccuracy: true, maximumAge: 3000, timeout: 20000 });
+  }
+  function getWake() {
+    try { if (navigator.wakeLock && state === "follow" && !wake) navigator.wakeLock.request("screen").then(function (w) { wake = w; w.addEventListener("release", function () { wake = null; }); }, function () {}); } catch (_) {}
+  }
+  function dropWake() { try { if (wake) { wake.release(); } } catch (_) {} wake = null; }
+  function setState(s) { state = s; if (s === "follow") getWake(); else dropWake(); ui(); }
+  function stop(keepToast) {
+    if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    if (acc) { map.removeLayer(acc); map.removeLayer(dot); acc = dot = null; }
+    if (arrow) { map.removeLayer(arrow); arrow = null; }
+    last = null; firstFix = true; setState("off");
+  }
+  function begin() {
+    if (!window.isSecureContext) { toast("Location only works on a secure (https) page. Open the https link or the Home Screen app.", 7000); return false; }
+    if (!navigator.geolocation) { toast("This browser doesn’t support location.", 5000); return false; }
+    return true;
+  }
+  function resume() {
+    setState("follow");
+    if (last) { programmatic = true; map.setView([last.coords.latitude, last.coords.longitude], Math.max(map.getZoom(), 15), { animate: true }); setTimeout(function () { programmatic = false; }, 700); }
+  }
+  function tap() {
+    if (state === "off") {
+      if (!begin()) return;
+      firstFix = true; setState("show"); startWatch();
+      toast("Finding you… keep this page open. iPhone only tracks while the screen is on.", 5000);
+    } else if (state === "show") {
+      setState("follow");
+      if (last) { programmatic = true; map.panTo([last.coords.latitude, last.coords.longitude]); setTimeout(function () { programmatic = false; }, 700); }
+      toast("Following you. Drag the map to pause; tap Resume to follow again. iPhone only tracks while the screen is on and this page is open.", 7000);
+    } else if (state === "follow") {
+      setState("paused");
+    } else { resume(); }
+  }
+  locBtn.addEventListener("click", tap);
+  document.getElementById("locate").addEventListener("click", function () {
+    if (state === "off") tap(); else if (last) { programmatic = true; map.setView([last.coords.latitude, last.coords.longitude], Math.max(map.getZoom(), 15)); setTimeout(function () { programmatic = false; }, 700); }
+  });
+  act.addEventListener("click", function () {
+    if (state === "show") tap(); else if (state === "follow") setState("paused"); else resume();
+  });
+  document.getElementById("gflLocStop").addEventListener("click", function () { stop(); toast("Location stopped.", 2500); });
+  map.on("dragstart", function () { if (state === "follow" && !programmatic) { setState("paused"); toast("Follow paused. Tap Resume to follow again.", 3500); } });
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible" || state === "off") return;
+    if (watchId != null) { navigator.geolocation.clearWatch(watchId); watchId = null; }
+    startWatch(); getWake();
+  });
+  function layoutLoc() {
+    var h = document.querySelector("header"); if (!h) return;
+    var b = h.getBoundingClientRect().bottom;
+    locBtn.style.top = (b + 90) + "px"; pill.style.top = (b + 90) + "px";
+  }
+  layoutLoc(); addEventListener("resize", layoutLoc); addEventListener("orientationchange", layoutLoc);
+  if (window.ResizeObserver) new ResizeObserver(layoutLoc).observe(document.querySelector("header"));
+  ui();
+  window.gflLoc = { state: function () { return state; }, stop: stop };
+})();
+</script>
 </body>
 </html>
