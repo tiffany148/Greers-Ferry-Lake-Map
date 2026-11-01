@@ -1,0 +1,12 @@
+package.json
+package-lock.json
+src
+server
+scripts
+migrations
+vite.config.ts
+tsconfig.json
+eslint.config.mjs
+.env.example
+startup.sh
+.grok
