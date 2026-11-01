@@ -229,6 +229,27 @@
   .gfl-me-ico{background:none;border:0}
   .gfl-me-ico .arr{width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:16px solid #1a73e8;margin:0 auto;transform-origin:50% 100%;filter:drop-shadow(0 0 2px #fff)}
 </style>
+
+<style id="lyrCss">
+  #basemap, #overlays { display: none !important; }
+  .lyr-btn { position: fixed; right: 64px; top: calc(env(safe-area-inset-top, 0px) + 166px); z-index: 1200; border: 0; border-radius: 12px;
+    padding: 9px 12px; font: 600 15px/1 system-ui, -apple-system, sans-serif; color: #fff; background: rgba(13,59,72,.92); box-shadow: 0 2px 10px rgba(0,0,0,.3); }
+  .lyr-btn.on { background: #6fd3c7; color: #0d3b48; }
+  .lyr-panel { position: fixed; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 210px); z-index: 1201; width: min(300px, calc(100vw - 24px));
+    max-height: calc(100vh - 260px); overflow-y: auto; -webkit-overflow-scrolling: touch; display: none; padding: 12px; border-radius: 14px;
+    background: rgba(13,59,72,.96); color: #fff; font: 14px/1.3 system-ui, -apple-system, sans-serif; box-shadow: 0 6px 24px rgba(0,0,0,.4); }
+  .lyr-panel.show { display: block; }
+  .lyr-panel h4 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #9fe3da; }
+  .lyr-panel h4:first-child { margin-top: 0; }
+  .lyr-panel select { width: 100%; font-size: 16px; padding: 7px; border-radius: 9px; border: 0; background: #fff; color: #0d3b48; }
+  .lyr-op { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .lyr-op input { flex: 1; } .lyr-op .pct { width: 30px; text-align: right; font-variant-numeric: tabular-nums; }
+  .lyr-i { width: 28px; height: 28px; border-radius: 50%; border: 0; background: #8a6a2f; color: #fff; font: italic 700 15px Georgia, serif; }
+  .lyr-chk { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid rgba(255,255,255,.08); }
+  .lyr-chk input[type=checkbox] { width: 20px; height: 20px; accent-color: #6fd3c7; }
+  .lyr-chk span { flex: 1; } .lyr-chk input[type=range] { width: 80px; }
+</style>
+<style id="sheetHide">.sheet.min{transform:translateY(calc(100% + 40px))!important;visibility:hidden;pointer-events:none}.sheet{transition:transform .25s,height .25s}</style>
 </head>
 <body>
   <div id="map"></div>
@@ -252,6 +273,7 @@
       <button class="tool" id="addPin">Add pin</button>
       <button class="tool" id="toggleSheet">Hide list</button>
     </div>
+    <div id="chipSlot" style="height:30px"></div>
     <div class="srch" id="srch">
       <form id="srchForm" autocomplete="off" role="search">
         <input id="srchIn" type="search" enterkeyhint="search" placeholder="Search pins, towns, places" aria-label="Search pins, towns and places" autocapitalize="off" autocorrect="off" spellcheck="false" />
@@ -1585,7 +1607,7 @@ let liveLastOk=0;
 liveChip.onclick=function(e){e.stopPropagation();livePop.classList.toggle("show");};
 document.addEventListener("click",function(e){if(!livePop.contains(e.target)&&e.target!==liveChip)livePop.classList.remove("show");});
 const hdr=document.querySelector("header");
-function place(){const b=hdr.getBoundingClientRect().bottom;liveChip.style.top=(b+10)+"px";livePop.style.top=(b+44)+"px";}
+function place(){const b=hdr.getBoundingClientRect().bottom,cs=document.getElementById("chipSlot");liveChip.style.top=(cs?cs.getBoundingClientRect().top+2:b+10)+"px";livePop.style.top=(b+44)+"px";}
 place();addEventListener("resize",place);if(window.ResizeObserver)new ResizeObserver(place).observe(hdr);
 function fmtAsOf(t){
   try { return new Date(t).toLocaleString([], { month:"short", day:"numeric", hour:"numeric", minute:"2-digit", timeZoneName:"short" }); } catch(e){ return ""; }
@@ -2145,5 +2167,87 @@ render();
   window.gflHistMaps = { set: set, pick: function (i) { sel.value = i; cur = i; show(); }, list: M, isOn: function () { return on; } };
 })();
 </script>
+
+<button type="button" class="lyr-btn" id="lyrBtn" aria-expanded="false" aria-controls="lyrPanel">Layers</button>
+<div class="lyr-panel" id="lyrPanel" role="dialog" aria-label="Map layers">
+  <h4>Base map</h4>
+  <select id="lyrBase" aria-label="Base map"></select>
+  <h4>Historical maps</h4>
+  <select id="lyrOv" aria-label="Historical maps"></select>
+  <div class="lyr-op" id="lyrOpRow"><span>Opacity</span><input type="range" id="lyrOp" min="0.15" max="1" step="0.02" aria-label="Overlay opacity" /><span class="pct" id="lyrPct"></span>
+    <button type="button" class="lyr-i" id="lyrI" aria-label="Map source">i</button></div>
+  <h4>Layers</h4>
+  <div id="lyrChecks"></div>
+</div>
+<script>
+/* ===== One Layers panel (final13): drives the original (now hidden) buttons so every layer keeps its own code. */
+(function () {
+  "use strict";
+  var $ = function (q) { return document.querySelector(q); };
+  var btn = $("#lyrBtn"), panel = $("#lyrPanel"), base = $("#lyrBase"), ov = $("#lyrOv"), op = $("#lyrOp"), pct = $("#lyrPct"), opRow = $("#lyrOpRow");
+  function isOn(b) { return !!b && (b.classList.contains("on") || b.getAttribute("aria-pressed") === "true"); }
+  function fire(el, t) { el.dispatchEvent(new Event(t, { bubbles: true })); }
+  // Base maps
+  document.querySelectorAll("#basemap [data-base]").forEach(function (b) { var o = document.createElement("option"); o.value = b.dataset.base; o.textContent = b.textContent.trim(); base.appendChild(o); });
+  base.addEventListener("change", function () { var b = $('#basemap [data-base="' + base.value + '"]'); if (b) b.click(); });
+  // Old-map overlays (one at a time)
+  var hmSel = $("#hmSel");
+  var OV = [{ v: "none", t: "None" }, { v: "hist", t: "Before the dam (USGS topo via Esri)", slider: "#histOpacity" },
+    { v: "prelake", t: "Before the lake · 1956", slider: "#preOpacity" }];
+  Array.prototype.forEach.call(hmSel.options, function (o) { OV.push({ v: "hm" + o.value, t: o.textContent, hm: o.value, slider: "#hmOpacity" }); });
+  OV.forEach(function (x) { var o = document.createElement("option"); o.value = x.v; o.textContent = x.t; ov.appendChild(o); });
+  function find(v) { for (var i = 0; i < OV.length; i++) if (OV[i].v === v) return OV[i]; return OV[0]; }
+  function ovBtn(k) { return $('#overlays [data-overlay="' + k + '"]'); }
+  function curOv() {
+    if (isOn(ovBtn("hmaps"))) return "hm" + hmSel.value;
+    if (isOn(ovBtn("prelake"))) return "prelake";
+    if (isOn(ovBtn("hist"))) return "hist";
+    return "none";
+  }
+  function syncOp() {
+    var x = find(ov.value); opRow.style.display = x.slider ? "flex" : "none"; if (!x.slider) return;
+    var s = $(x.slider); op.min = s.min; op.max = s.max; op.value = s.value; pct.textContent = Math.round(s.value * 100);
+  }
+  ov.addEventListener("change", function () {
+    var x = find(ov.value);
+    ["hist", "prelake", "hmaps"].forEach(function (k) { var b = ovBtn(k); var want = x.v === k || (k === "hmaps" && x.hm != null); if (isOn(b) && !want) b.click(); });
+    if (x.hm != null) { if (!isOn(ovBtn("hmaps"))) ovBtn("hmaps").click(); if (hmSel.value !== x.hm) { hmSel.value = x.hm; fire(hmSel, "change"); } }
+    else if (x.v !== "none" && !isOn(ovBtn(x.v))) ovBtn(x.v).click();
+    syncOp();
+  });
+  op.addEventListener("input", function () { var x = find(ov.value); if (!x.slider) return; var s = $(x.slider); s.value = op.value; fire(s, "input"); pct.textContent = Math.round(op.value * 100); });
+  var CREDIT = {
+    hist: 'Before the dam: USGS historical topographic maps via <a href="https://www.arcgis.com/home/item.html?id=99cd5fbd98934028802b4f797c4b1732" target="_blank" rel="noopener">Esri USA Topo Maps</a>. Mostly shows the lake era.',
+    prelake: 'Before the lake: <a href="https://ngmdb.usgs.gov/topoview/" target="_blank" rel="noopener">USGS Historical Topographic Map Collection</a>, 1:250,000 map dated 1956 (via Esri).'
+  };
+  $("#lyrI").addEventListener("click", function (e) {
+    e.stopPropagation(); var x = find(ov.value);
+    if (x.hm != null) { $("#hmInfo").click(); return; }
+    var t = $("#gflToast"); if (!t || !CREDIT[x.v]) return; t.innerHTML = CREDIT[x.v]; t.classList.add("show"); setTimeout(function () { t.classList.remove("show"); }, 8000);
+  });
+  // Toggle layers
+  var CH = [{ k: "county", t: "County lines" }, { k: "stark", t: "Stark history" }, { k: "geo", t: "Geology (tap map for rock type)", slider: "#geoOpacity" }, { k: "parcels", t: "Parcels & owners", slider: "#parOpacity" }];
+  var box = $("#lyrChecks");
+  CH.forEach(function (c) {
+    var l = document.createElement("label"); l.className = "lyr-chk";
+    l.innerHTML = '<input type="checkbox" data-k="' + c.k + '"><span>' + c.t.replace(/&/g, "&amp;") + '</span>' + (c.slider ? '<input type="range" aria-label="' + c.t + ' opacity">' : "");
+    box.appendChild(l); c.cb = l.querySelector("[type=checkbox]"); c.rg = l.querySelector("[type=range]");
+    c.cb.addEventListener("change", function () { var b = ovBtn(c.k); if (b && isOn(b) !== c.cb.checked) b.click(); setTimeout(syncAll, 50); });
+    if (c.rg) { var s = $(c.slider); c.rg.min = s.min; c.rg.max = s.max; c.rg.step = s.step;
+      c.rg.addEventListener("input", function () { s.value = c.rg.value; fire(s, "input"); }); }
+  });
+  function syncAll() {
+    var a = $("#basemap .tool.on"); if (a) base.value = a.dataset.base;
+    ov.value = curOv(); syncOp();
+    CH.forEach(function (c) { c.cb.checked = isOn(ovBtn(c.k)); if (c.rg) c.rg.value = $(c.slider).value; });
+  }
+  function open(v) { panel.classList.toggle("show", v); btn.classList.toggle("on", v); btn.setAttribute("aria-expanded", v ? "true" : "false"); if (v) syncAll(); }
+  btn.addEventListener("click", function (e) { e.stopPropagation(); open(!panel.classList.contains("show")); });
+  panel.addEventListener("click", function (e) { e.stopPropagation(); });
+  map.on("click dragstart", function () { if (panel.classList.contains("show")) open(false); });
+  window.gflLayers = { open: open, sync: syncAll };
+})();
+</script>
+<script>(function(){var h=document.querySelector("header");function f(){var b=h.getBoundingClientRect().bottom,B=document.getElementById("lyrBtn"),P=document.getElementById("lyrPanel");if(B)B.style.top=(b+10)+"px";if(P)P.style.top=(b+56)+"px";}f();addEventListener("resize",f);if(window.ResizeObserver)new ResizeObserver(f).observe(h);})();</script>
 </body>
 </html>
