@@ -152,7 +152,7 @@
     .banner.show { display: block; }
     .banner{position:fixed!important;z-index:1400!important;top:auto!important;bottom:calc(96px + env(safe-area-inset-bottom))!important;box-shadow:0 4px 14px #0008}
     .banner button{margin-left:10px;background:#08323c;color:#e8c56b;border:0;border-radius:8px;padding:4px 10px;font:600 12px system-ui,sans-serif}
-    body.gfl-adding .leaflet-marker-pane, body.gfl-adding .leaflet-overlay-pane, body.gfl-adding .leaflet-pane[class*="starkSec"], body.gfl-adding .leaflet-pane[class*="starkPts"], body.gfl-adding .leaflet-pane[class*="parcels"], body.gfl-adding .leaflet-pane[class*="geology"], body.gfl-adding .leaflet-pane[class*="historical"], body.gfl-adding .leaflet-pane[class*="preLake"], body.gfl-adding .pre-note, body.gfl-adding .leaflet-pane[class*="labels"], body.gfl-adding .leaflet-shadow-pane, body.gfl-adding .live-chip, body.gfl-adding .geo-hint, body.gfl-adding .par-note { pointer-events:none!important }
+    body.gfl-adding .leaflet-marker-pane, body.gfl-adding .leaflet-overlay-pane, body.gfl-adding .leaflet-pane[class*="starkSec"], body.gfl-adding .leaflet-pane[class*="starkPts"], body.gfl-adding .leaflet-pane[class*="parcels"], body.gfl-adding .leaflet-pane[class*="geology"], body.gfl-adding .leaflet-pane[class*="historical"], body.gfl-adding .leaflet-pane[class*="preLake"], body.gfl-adding .leaflet-pane[class*="histMaps"], body.gfl-adding .pre-note, body.gfl-adding .leaflet-pane[class*="labels"], body.gfl-adding .leaflet-shadow-pane, body.gfl-adding .live-chip, body.gfl-adding .geo-hint, body.gfl-adding .par-note { pointer-events:none!important }
     body.gfl-adding .leaflet-interactive { pointer-events:none!important }
     body.gfl-adding #map { cursor: crosshair }
     #addMenu{z-index:1450!important;max-height:calc(100vh - 120px);overflow:auto}
@@ -167,6 +167,11 @@
   /* Before the lake (final10) */
   .pre-note{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(118px + env(safe-area-inset-bottom));z-index:1200;background:#3b2a12ee;color:#fff4dc;border:1px solid #8a6a2f;border-radius:12px;padding:6px 12px;font-size:12px;line-height:1.3;display:none;pointer-events:none;text-align:center;max-width:92vw}
   .pre-note.show{display:block}
+  .hm-wrap{flex:0 0 auto;width:min(270px,68vw);box-sizing:border-box;flex-wrap:wrap;row-gap:4px}
+  .hm-wrap select{flex:1 1 100%;min-width:0;max-width:100%;background:var(--panel);color:var(--text);border:1px solid #1f6276;border-radius:8px;padding:4px 6px;font-size:16px}
+  .hm-wrap input[type="range"]{flex:1;width:auto}
+  .hm-i{width:24px;height:24px;border-radius:50%;border:1px solid #8a6a2f;background:#3b2a12;color:#fff4dc;font:italic 700 13px Georgia,serif;padding:0}
+  .hm-tag{font-size:10px;padding:1px 6px;border-radius:999px;margin-left:4px}
   body.gfl-adding .pre-note{display:none!important}
   .gfl-north svg{transition:transform .15s}
 
@@ -273,6 +278,13 @@
         Opacity
         <input type="range" id="preOpacity" min="0.15" max="1" step="0.02" value="0.95" aria-label="Before the lake opacity" />
         <span class="pct" id="prePct">95</span>
+      </label>
+      <button class="tool" data-overlay="hmaps" aria-pressed="false" title="Pick one old USGS map sheet to lay over the map">Historic maps</button>
+      <label class="fade-wrap hm-wrap" id="hmFade">
+        <select id="hmSel" aria-label="Historic map sheet"></select>
+        <input type="range" id="hmOpacity" min="0.15" max="1" step="0.02" value="0.9" aria-label="Historic map opacity" />
+        <span class="pct" id="hmPct">90</span>
+        <button type="button" id="hmInfo" class="hm-i" aria-label="Map source">i</button>
       </label>
       <button class="tool" data-overlay="geo" aria-pressed="false">Geology</button>
       <label class="fade-wrap" id="geoFade">
@@ -2039,6 +2051,98 @@ render();
   op.addEventListener("input", sync);
   sync();
   window.gflPreLake = { set: set, isOn: function () { return on; }, layer: layer };
+})();
+</script>
+<script>
+/* ===== Historic maps picker (final11): one USGS HTMC sheet at a time, locked by raster OBJECTID on Esri's
+   USGS_Historical_Topographic_Maps ImageServer. Dates/IDs read from the service's own metadata (Date_On_Map, Imprint_Year, Scan_Id). */
+(function () {
+  "use strict";
+  var M = [
+    { id: 27553, scan: 260553, name: "Mountain View", scale: "1:125,000", ed: "1894 edition, reprinted 1949", sub: "surveyed 1889", pre: true,
+      file: "AR_Mountain%20View_260553_1894_125000" , dir: "125000"},
+    { id: 181830, scan: 465219, name: "Russellville", scale: "1:250,000", ed: "1956 (shaded-relief printing)", sub: "field check 1953", pre: true,
+      file: "AR_Russellville_465219_1956_250000", dir: "250000" },
+    { id: 27603, scan: 260604, name: "Russellville", scale: "1:250,000", ed: "1964", sub: "first edition showing the new lake", pre: false,
+      file: "AR_Russellville_260604_1964_250000", dir: "250000" },
+    { id: 27601, scan: 260607, name: "Russellville", scale: "1:250,000", ed: "1984", sub: "later reprint", pre: false,
+      file: "AR_Russellville_260607_1984_250000", dir: "250000" },
+    { id: 27452, scan: 315273, name: "Mountain View", scale: "1:100,000 metric", ed: "1983", sub: "photos 1980", pre: false,
+      file: "AR_Mountain%20View_315273_1983_100000", dir: "100000" },
+    { id: 27600, scan: 260608, name: "Russellville", scale: "1:250,000 metric", ed: "1992 (printed 1993)", sub: "", pre: false,
+      file: "AR_Russellville_260608_1992_250000", dir: "250000" },
+    { local: "russellville-1956", scan: 260605, name: "Russellville", scale: "1:250,000", ed: "1956 (standard printing)", sub: "Tiffany's GeoTIFF · stored on this site", pre: true,
+      file: "AR_Russellville_260605_1956_250000", dir: "250000", pieces: [["0_0.jpg",[35.6120708,-94.0,36.0,-93.5216651]],["0_1.jpg",[35.6120708,-93.5216651,36.0,-93.0433302]],["0_2.jpg",[35.6120708,-93.0433302,36.0,-92.5649952]],["0_3.jpg",[35.6120708,-92.5649952,36.0,-92.0866603]],["0_4.jpg",[35.6120708,-92.0866603,36.0,-91.9997753]],["1_0.jpg",[35.2222513,-94.0,35.6120708,-93.5216651]],["1_1.jpg",[35.2222513,-93.5216651,35.6120708,-93.0433302]],["1_2.jpg",[35.2222513,-93.0433302,35.6120708,-92.5649952]],["1_3.jpg",[35.2222513,-92.5649952,35.6120708,-92.0866603]],["1_4.jpg",[35.2222513,-92.0866603,35.6120708,-91.9997753]],["2_0.jpg",[34.9998545,-94.0,35.2222513,-93.5216651]],["2_1.jpg",[34.9998545,-93.5216651,35.2222513,-93.0433302]],["2_2.jpg",[34.9998545,-93.0433302,35.2222513,-92.5649952]],["2_3.jpg",[34.9998545,-92.5649952,35.2222513,-92.0866603]],["2_4.jpg",[34.9998545,-92.0866603,35.2222513,-91.9997753]]] },
+    { local: "greersferry-1973a", scan: 258619, name: "Greers Ferry", scale: "1:24,000", ed: "1973 (scan 258619)", sub: "close-up quad of the Narrows area · stored on this site", pre: false,
+      file: "AR_Greers%20Ferry_258619_1973_24000", dir: "24000", pieces: [["0_0.jpg",[35.5891015,-92.25,35.625,-92.205846]],["0_1.jpg",[35.5891015,-92.205846,35.625,-92.161692]],["0_2.jpg",[35.5891015,-92.161692,35.625,-92.1249976]],["1_0.jpg",[35.5531869,-92.25,35.5891015,-92.205846]],["1_1.jpg",[35.5531869,-92.205846,35.5891015,-92.161692]],["1_2.jpg",[35.5531869,-92.161692,35.5891015,-92.1249976]],["2_0.jpg",[35.5172563,-92.25,35.5531869,-92.205846]],["2_1.jpg",[35.5172563,-92.205846,35.5531869,-92.161692]],["2_2.jpg",[35.5172563,-92.161692,35.5531869,-92.1249976]],["3_0.jpg",[35.499987,-92.25,35.5172563,-92.205846]],["3_1.jpg",[35.499987,-92.205846,35.5172563,-92.161692]],["3_2.jpg",[35.499987,-92.161692,35.5172563,-92.1249976]]] },
+    { local: "greersferry-1973b", scan: 258621, name: "Greers Ferry", scale: "1:24,000", ed: "1973–82 printing (scan 258621; USGS metadata dates it 1973–1982)", sub: "later printing · stored on this site", pre: false,
+      file: "AR_Greers%20Ferry_258621_1973_24000", dir: "24000", pieces: [["0_0.jpg",[35.5891015,-92.25,35.625,-92.205846]],["0_1.jpg",[35.5891015,-92.205846,35.625,-92.161692]],["0_2.jpg",[35.5891015,-92.161692,35.625,-92.1249976]],["1_0.jpg",[35.5531869,-92.25,35.5891015,-92.205846]],["1_1.jpg",[35.5531869,-92.205846,35.5891015,-92.161692]],["1_2.jpg",[35.5531869,-92.161692,35.5891015,-92.1249976]],["2_0.jpg",[35.5172563,-92.25,35.5531869,-92.205846]],["2_1.jpg",[35.5172563,-92.205846,35.5531869,-92.161692]],["2_2.jpg",[35.5172563,-92.161692,35.5531869,-92.1249976]],["3_0.jpg",[35.499987,-92.25,35.5172563,-92.205846]],["3_1.jpg",[35.499987,-92.205846,35.5172563,-92.161692]],["3_2.jpg",[35.499987,-92.161692,35.5172563,-92.1249976]]] },
+    { local: "greersferry-2024", name: "Greers Ferry", scale: "1:24,000 US Topo", ed: "2024 (US Topo, July 16 2024)", sub: "modern map · stored on this site", pre: false, modern: true, pieces: [["0_0.jpg",[35.5891015,-92.25,35.625,-92.205846]],["0_1.jpg",[35.5891015,-92.205846,35.625,-92.161692]],["0_2.jpg",[35.5891015,-92.161692,35.625,-92.1249976]],["1_0.jpg",[35.5531869,-92.25,35.5891015,-92.205846]],["1_1.jpg",[35.5531869,-92.205846,35.5891015,-92.161692]],["1_2.jpg",[35.5531869,-92.161692,35.5891015,-92.1249976]],["2_0.jpg",[35.5172563,-92.25,35.5531869,-92.205846]],["2_1.jpg",[35.5172563,-92.205846,35.5531869,-92.161692]],["2_2.jpg",[35.5172563,-92.161692,35.5531869,-92.1249976]],["3_0.jpg",[35.499987,-92.25,35.5172563,-92.205846]],["3_1.jpg",[35.499987,-92.205846,35.5172563,-92.161692]],["3_2.jpg",[35.499987,-92.161692,35.5172563,-92.1249976]]] },
+    { local: "greersferry-2024-photo", name: "Greers Ferry", scale: "1:24,000 US Topo + photo", ed: "2024 (US Topo with aerial photo)", sub: "modern map · stored on this site", pre: false, modern: true, pieces: [["0_0.jpg",[35.5891015,-92.25,35.625,-92.205846]],["0_1.jpg",[35.5891015,-92.205846,35.625,-92.161692]],["0_2.jpg",[35.5891015,-92.161692,35.625,-92.1249976]],["1_0.jpg",[35.5531869,-92.25,35.5891015,-92.205846]],["1_1.jpg",[35.5531869,-92.205846,35.5891015,-92.161692]],["1_2.jpg",[35.5531869,-92.161692,35.5891015,-92.1249976]],["2_0.jpg",[35.5172563,-92.25,35.5531869,-92.205846]],["2_1.jpg",[35.5172563,-92.205846,35.5531869,-92.161692]],["2_2.jpg",[35.5172563,-92.161692,35.5531869,-92.1249976]],["3_0.jpg",[35.499987,-92.25,35.5172563,-92.205846]],["3_1.jpg",[35.499987,-92.205846,35.5172563,-92.161692]],["3_2.jpg",[35.499987,-92.161692,35.5172563,-92.1249976]]] }
+  ];
+  var rp = map.getPane("rotatePane") || map.getPane("mapPane");
+  map.createPane("histMaps", rp);
+  var pane = map.getPane("histMaps"); pane.style.zIndex = 356; pane.style.pointerEvents = "none";
+  var SERVER = "https://historical1.arcgis.com/arcgis/rest/services/USGS_Historical_Topographic_Maps/ImageServer/exportImage";
+  var HALF = 20037508.342789244;
+  var sel = document.getElementById("hmSel"), op = document.getElementById("hmOpacity"), pct = document.getElementById("hmPct"), fade = document.getElementById("hmFade");
+  M.forEach(function (m, i) { var o = document.createElement("option"); o.value = i;
+    o.textContent = m.ed.split(" ")[0] + " · " + m.name + " " + m.scale.replace(",000", "k") + " · " + (m.modern ? "today" : m.pre ? "before lake" : "after lake") + (m.local ? " ★" : ""); sel.appendChild(o); });
+  var cur = 0, on = false, layer = null, ok = 0, bad = 0, warned = false;
+  function links(m) {
+    if (m.modern) return '<a href="https://www.usgs.gov/programs/national-geospatial-program/us-topo-maps-america" target="_blank" rel="noopener">USGS US Topo</a> · <a href="https://apps.nationalmap.gov/downloader/" target="_blank" rel="noopener">The National Map</a>';
+    var b = "https://prd-tnm.s3.amazonaws.com/StagedProducts/Maps/HistoricalTopo/";
+    return '<a href="https://ngmdb.usgs.gov/topoview/viewer/#11/35.52/-92.1" target="_blank" rel="noopener">topoView</a> · '
+      + '<a href="https://thor-f5.er.usgs.gov/ngtoc/metadata/htmc/AR/' + m.dir + '/' + m.file + '_geo.xml" target="_blank" rel="noopener">USGS metadata</a> · '
+      + '<a href="' + b + 'GeoTIFF/AR/' + m.file + '_geo.tif" target="_blank" rel="noopener">GeoTIFF</a>';
+  }
+  function credit(m) {
+    return '<b>' + m.name + ' ' + m.scale + ', ' + m.ed + '</b>' + (m.sub ? ' (' + m.sub + ')' : '')
+      + ' <span class="hm-tag" style="background:' + (m.pre ? '#8a6a2f' : '#1f6276') + '">' + (m.modern ? 'today' : m.pre ? 'before the lake' : 'after the lake') + '</span><br>'
+      + (m.modern ? 'U.S. Geological Survey, US Topo 7.5-minute map for Greers Ferry, AR (2024). ' : 'U.S. Geological Survey, Historical Topographic Map Collection, scan ' + m.scan + (m.local ? ' (from the GeoTIFF, stored on this site). ' : ' (via Esri). ')) + links(m);
+  }
+  var toastEl = document.getElementById("gflToast"), tt;
+  function toast(h, ms) { toastEl.innerHTML = h; toastEl.classList.add("show"); clearTimeout(tt); tt = setTimeout(function () { toastEl.classList.remove("show"); }, ms || 7000); }
+  function make(m) {
+    if (m.local) {
+      var g = L.layerGroup(), n = 0;
+      m.pieces.forEach(function (p) {
+        var io = L.imageOverlay("hist/" + m.local + "/" + p[0], [[p[1][0], p[1][1]], [p[1][2], p[1][3]]], { pane: "histMaps", interactive: false,
+          attribution: n++ ? "" : ('Historic map: USGS ' + m.name + ' ' + m.ed.split(" ")[0]) });
+        io.on("load", function () { ok++; });
+        io.on("error", function () { bad++; if (!warned && !ok && bad >= 2) { warned = true; toast("That map’s image files didn’t load. Make sure the hist folder was uploaded.", 6000); } });
+        g.addLayer(io);
+      });
+      return g;
+    }
+    var rule = encodeURIComponent(JSON.stringify({ mosaicMethod: "esriMosaicLockRaster", lockRasterIds: [m.id] }));
+    var l = L.tileLayer("https://historical1.arcgis.com/{z}/{x}/{y}", { pane: "histMaps", minZoom: 7, maxZoom: 18, maxNativeZoom: 14,
+      detectRetina: false, updateWhenIdle: true, keepBuffer: 2,
+      attribution: 'Historic map: <a href="https://ngmdb.usgs.gov/topoview/" target="_blank" rel="noopener">USGS HTMC</a> ' + m.name + ' ' + m.ed.split(" ")[0] });
+    l.getTileUrl = function (c) { var z = (2 * HALF) / Math.pow(2, c.z), x0 = -HALF + c.x * z, y1 = HALF - c.y * z;
+      return SERVER + "?bbox=" + x0 + "," + (y1 - z) + "," + (x0 + z) + "," + y1 + "&bboxSR=3857&imageSR=3857&size=256,256&format=png32&transparent=true&interpolation=RSP_BilinearInterpolation&mosaicRule=" + rule + "&f=image"; };
+    l.on("tileload", function () { ok++; });
+    l.on("tileerror", function () { bad++; if (!warned && !ok && bad >= 4) { warned = true; toast("That historic map didn’t load (USGS/Esri service not answering). Try again in a bit.", 6000); } });
+    return l;
+  }
+  function show() {
+    if (layer) { map.removeLayer(layer); layer = null; }
+    if (!on) return;
+    ok = 0; bad = 0; warned = false; layer = make(M[cur]).addTo(map); toast(credit(M[cur]));
+  }
+  function sync() { pane.style.opacity = String(op.value); pct.textContent = String(Math.round(op.value * 100)); fade.classList.toggle("show", on); }
+  function set(v) { on = v; var b = document.querySelector('[data-overlay="hmaps"]');
+    b.classList.toggle("on", on); b.setAttribute("aria-pressed", on ? "true" : "false"); sync(); show();
+    if (on) setTimeout(function () { var row = document.getElementById("overlays"); row.scrollLeft = Math.max(0, fade.offsetLeft - row.offsetLeft - 96); }, 60); }
+  document.getElementById("overlays").addEventListener("click", function (e) {
+    if (e.target.closest("input, select, label.fade-wrap")) return;
+    if (e.target.closest('[data-overlay="hmaps"]')) set(!on);
+  });
+  sel.addEventListener("change", function () { cur = Number(sel.value); show(); });
+  op.addEventListener("input", sync);
+  document.getElementById("hmInfo").addEventListener("click", function (e) { e.preventDefault(); e.stopPropagation(); toast(credit(M[cur]), 9000); });
+  sync();
+  window.gflHistMaps = { set: set, pick: function (i) { sel.value = i; cur = i; show(); }, list: M, isOn: function () { return on; } };
 })();
 </script>
 </body>
