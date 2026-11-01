@@ -10,3 +10,5 @@ eslint.config.mjs
 .env.example
 startup.sh
 .grok
+.github
+tools

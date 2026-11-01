@@ -2251,5 +2251,44 @@ render();
 })();
 </script>
 <script>(function(){var h=document.querySelector("header");function f(){var b=h.getBoundingClientRect().bottom,B=document.getElementById("lyrBtn"),P=document.getElementById("lyrPanel");if(B)B.style.top=(b+10)+"px";if(P)P.style.top=(b+56)+"px";}f();addEventListener("resize",f);if(window.ResizeObserver)new ResizeObserver(f).observe(h);})();</script>
+<script id="burnBanLayer">
+/* Burn bans: Arkansas Forestry Division county list (burnbans.json, refreshed by tools/scrape_burnbans.py) on Census TIGERweb county shapes */
+(function () {
+  "use strict";
+  var box = document.getElementById("lyrChecks"); if (!box || typeof map === "undefined") return;
+  var SRC = "https://mip.agri.arkansas.gov/agtools/Forestry/Fire_Info/Burn_Bans?show_districts=False";
+  var TIGER = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer/1/query?where=STATE%3D%2705%27&outFields=BASENAME,GEOID&outSR=4326&geometryPrecision=4&maxAllowableOffset=0.003&f=geojson";
+  var rp = map.getPane("rotatePane") || map.getPane("mapPane");
+  map.createPane("burnBans", rp); map.getPane("burnBans").style.zIndex = 436;
+  var layer = null, shapes = null, data = null, on = false, timer = null;
+  var l = document.createElement("label"); l.className = "lyr-chk";
+  l.innerHTML = '<input type="checkbox" id="burnChk"><span>Burn bans (AR Forestry)</span>';
+  box.appendChild(l); var cb = l.querySelector("input");
+  function toast(h) { var t = document.getElementById("gflToast"); if (!t) return; t.innerHTML = h; t.classList.add("show"); setTimeout(function () { t.classList.remove("show"); }, 6000); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+  function key(n) { return String(n).toLowerCase().replace(/^saint /, "st. ").replace(/\s+county$/, "").trim(); }
+  function getShapes() { return shapes ? Promise.resolve(shapes) : fetch(TIGER).then(function (r) { if (!r.ok) throw new Error("counties " + r.status); return r.json(); }).then(function (j) { shapes = j; return j; }); }
+  function getData() { return fetch("burnbans.json?t=" + Date.now(), { cache: "no-store" }).then(function (r) { if (!r.ok) throw new Error("burn ban list " + r.status); return r.json(); }); }
+  function draw() {
+    var set = {}; (data.counties_under_ban || []).forEach(function (n) { set[key(n)] = 1; });
+    if (layer) map.removeLayer(layer);
+    layer = L.geoJSON(shapes, { pane: "burnBans", renderer: L.svg({ pane: "burnBans", padding: 0.5 }),
+      style: function (f) { var b = set[key(f.properties.BASENAME)]; return { color: b ? "#b71c1c" : "#2e7d32", weight: 1, opacity: 0.7, fillColor: b ? "#e53935" : "#66bb6a", fillOpacity: b ? 0.32 : 0.08 }; },
+      onEachFeature: function (f, ly) { var n = f.properties.BASENAME, b = set[key(n)]; ly.on("click", function () { if (window.gflLayers) window.gflLayers.open(false); });
+        ly.bindPopup("<b>" + esc(n) + " County</b><br>" + (b ? "<span style='color:#c62828;font-weight:600'>🔥 Burn ban in effect</span>" : "<span style='color:#2e7d32;font-weight:600'>No burn ban listed</span>") +
+          "<br><span style='font-size:11px'>As of " + esc(data.as_of || "?") + " · county judges issue bans</span><br><a href='" + SRC + "' target='_blank' rel='noopener'>Arkansas Forestry Division</a>"); } }).addTo(map);
+  }
+  function refresh() {
+    return Promise.all([getShapes(), getData()]).then(function (r) { data = r[1]; if (on) draw(); })
+      .catch(function (e) { toast("Burn ban status unavailable right now (" + esc(e.message) + "). <a href='" + SRC + "' target='_blank' rel='noopener'>Check Arkansas Forestry</a>"); });
+  }
+  cb.addEventListener("change", function () {
+    on = cb.checked; clearInterval(timer);
+    if (on) { refresh().then(function () { if (on && data) toast("Burn bans as of " + esc(data.as_of) + " · " + (data.counties_under_ban || []).length + " counties · <a href='" + SRC + "' target='_blank' rel='noopener'>AR Forestry</a>"); }); timer = setInterval(refresh, 15 * 60 * 1000); }
+    else if (layer) { map.removeLayer(layer); layer = null; }
+  });
+  window.gflBurn = { refresh: refresh };
+})();
+</script>
 </body>
 </html>
