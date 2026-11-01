@@ -7,7 +7,8 @@
   "background_color": "#072a36",
   "theme_color": "#0b3d4d",
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+    { "src": "lake-icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "lake-icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "lake-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
