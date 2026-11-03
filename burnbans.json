@@ -1,8 +1,8 @@
 {
  "source": "Arkansas Department of Agriculture, Forestry Division",
  "source_url": "https://mip.agri.arkansas.gov/agtools/Forestry/Fire_Info/Burn_Bans?show_districts=False",
- "as_of": "11/2/2026 12:44 PM",
- "fetched_utc": "2026-11-02T20:45:06Z",
+ "as_of": "11/3/2026 11:31 AM",
+ "fetched_utc": "2026-11-03T18:24:47Z",
  "counties_under_ban": [
   "Arkansas",
   "Ashley",
@@ -11,7 +11,6 @@
   "Chicot",
   "Clark",
   "Clay",
-  "Cleburne",
   "Cleveland",
   "Columbia",
   "Conway",
@@ -19,7 +18,6 @@
   "Dallas",
   "Desha",
   "Drew",
-  "Faulkner",
   "Garland",
   "Grant",
   "Hempstead",
@@ -35,22 +33,16 @@
   "Miller",
   "Mississippi",
   "Monroe",
-  "Montgomery",
-  "Nevada",
   "Ouachita",
   "Perry",
   "Phillips",
   "Pike",
   "Poinsett",
-  "Polk",
   "Prairie",
   "Pulaski",
   "Saline",
-  "Scott",
   "Sevier",
   "Union",
-  "Van Buren",
-  "Woodruff",
-  "Yell"
+  "Woodruff"
  ]
 }
