@@ -1,8 +1,8 @@
 {
  "source": "Arkansas Department of Agriculture, Forestry Division",
  "source_url": "https://mip.agri.arkansas.gov/agtools/Forestry/Fire_Info/Burn_Bans?show_districts=False",
- "as_of": "11/9/2026 9:12 AM",
- "fetched_utc": "2026-11-09T18:44:45Z",
+ "as_of": "11/9/2026 1:39 PM",
+ "fetched_utc": "2026-11-10T02:04:12Z",
  "counties_under_ban": [
   "Ashley",
   "Bradley",
@@ -28,6 +28,7 @@
   "Pike",
   "Pulaski",
   "Saline",
+  "Sevier",
   "Union"
  ]
 }
