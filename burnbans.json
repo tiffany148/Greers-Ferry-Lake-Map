@@ -1,8 +1,8 @@
 {
  "source": "Arkansas Department of Agriculture, Forestry Division",
  "source_url": "https://mip.agri.arkansas.gov/agtools/Forestry/Fire_Info/Burn_Bans?show_districts=False",
- "as_of": "11/17/2026 11:43 AM",
- "fetched_utc": "2026-11-17T22:18:50Z",
+ "as_of": "11/18/2026 3:18 PM",
+ "fetched_utc": "2026-11-18T21:24:50Z",
  "counties_under_ban": [
   "Arkansas",
   "Ashley",
@@ -15,6 +15,7 @@
   "Dallas",
   "Desha",
   "Drew",
+  "Faulkner",
   "Garland",
   "Hempstead",
   "Hot Spring",
@@ -23,6 +24,7 @@
   "Lafayette",
   "Lincoln",
   "Little River",
+  "Lonoke",
   "Miller",
   "Ouachita",
   "Perry",
@@ -31,6 +33,7 @@
   "Pulaski",
   "Saline",
   "Sevier",
-  "Union"
+  "Union",
+  "Van Buren"
  ]
 }
