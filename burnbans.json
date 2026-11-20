@@ -1,8 +1,8 @@
 {
  "source": "Arkansas Department of Agriculture, Forestry Division",
  "source_url": "https://mip.agri.arkansas.gov/agtools/Forestry/Fire_Info/Burn_Bans?show_districts=False",
- "as_of": "11/19/2026 3:26 PM",
- "fetched_utc": "2026-11-19T21:29:09Z",
+ "as_of": "11/20/2026 11:35 AM",
+ "fetched_utc": "2026-11-20T20:11:06Z",
  "counties_under_ban": [
   "Arkansas",
   "Ashley",
@@ -35,6 +35,7 @@
   "Saline",
   "Sevier",
   "Union",
-  "Van Buren"
+  "Van Buren",
+  "White"
  ]
 }
